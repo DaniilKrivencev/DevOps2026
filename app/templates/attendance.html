@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Посещаемость — Городская Дума{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Главная</a>
+<span class="breadcrumb-sep">/</span>
+<span class="breadcrumb-current">Посещаемость</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Посещаемость <span id="totalBadge" style="display:inline-block;background:var(--navy-100);color:var(--navy-700);font-size:14px;font-weight:600;padding:2px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;"></span></h2>
+    <p class="page-header-sub">Учёт явки депутатов на заседания</p>
+  </div>
+  <div class="page-header-actions">
+    <button class="btn btn-accent" onclick="openCreate()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Отметить явку
+    </button>
+  </div>
+</div>
+
+<!-- Stat mini row -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px;" id="statRow">
+  <div class="card card-body" style="display:flex;align-items:center;gap:14px;padding:16px 18px;">
+    <div class="stat-icon green" style="width:38px;height:38px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <div><div style="font-size:22px;font-weight:700;" id="cntPresent">—</div><div style="font-size:11px;font-weight:600;color:var(--n-500);text-transform:uppercase;letter-spacing:.05em;">Присутствовал</div></div>
+  </div>
+  <div class="card card-body" style="display:flex;align-items:center;gap:14px;padding:16px 18px;">
+    <div class="stat-icon" style="width:38px;height:38px;background:var(--error-bg);color:var(--error-tx);">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </div>
+    <div><div style="font-size:22px;font-weight:700;" id="cntAbsent">—</div><div style="font-size:11px;font-weight:600;color:var(--n-500);text-transform:uppercase;letter-spacing:.05em;">Отсутствовал</div></div>
+  </div>
+  <div class="card card-body" style="display:flex;align-items:center;gap:14px;padding:16px 18px;">
+    <div class="stat-icon amber" style="width:38px;height:38px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg>
+    </div>
+    <div><div style="font-size:22px;font-weight:700;" id="cntExcused">—</div><div style="font-size:11px;font-weight:600;color:var(--n-500);text-transform:uppercase;letter-spacing:.05em;">Уваж. причина</div></div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <select class="filter-select" id="filterSession" onchange="loadData()" aria-label="Фильтр по заседанию" style="max-width:300px;">
+    <option value="">Все заседания</option>
+  </select>
+  <select class="filter-select" id="filterDeputy" onchange="loadData()" aria-label="Фильтр по депутату">
+    <option value="">Все депутаты</option>
+  </select>
+  <span class="results-count" id="resultsCount"></span>
+  <div class="toolbar-spacer"></div>
+  <button class="btn btn-ghost btn-sm" id="resetBtn" onclick="resetFilters()" style="display:none;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Сбросить
+  </button>
+</div>
+
+<div class="table-wrap">
+  <table aria-label="Записи посещаемости">
+    <thead>
+      <tr>
+        <th>Депутат</th>
+        <th>Заседание</th>
+        <th>Статус</th>
+        <th>Примечание</th>
+        <th style="width:110px;"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="5"><div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+        <div class="skel" style="height:20px;width:60%;"></div>
+        <div class="skel" style="height:20px;width:80%;"></div>
+      </div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="attModal" role="dialog" aria-modal="true" aria-labelledby="attModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="attModalTitle">Отметить явку</h3>
+      <button class="modal-close" onclick="closeModal('attModal')" aria-label="Закрыть">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="attForm" novalidate>
+        <div class="form-grid cols-1" style="gap:14px;">
+          <div class="form-group" id="sessionGroup">
+            <label class="form-label" for="inp_session_id">Заседание<span class="req">*</span></label>
+            <select class="form-input form-select" id="inp_session_id" required>
+              <option value="">— выберите —</option>
+            </select>
+          </div>
+          <div class="form-group" id="deputyGroup">
+            <label class="form-label" for="inp_deputy_id">Депутат<span class="req">*</span></label>
+            <select class="form-input form-select" id="inp_deputy_id" required>
+              <option value="">— выберите —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_att_status">Статус явки</label>
+            <select class="form-input form-select" id="inp_att_status">
+              <option value="present">✓ Присутствовал</option>
+              <option value="absent">✕ Отсутствовал</option>
+              <option value="excused">⚠ Уважительная причина</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_att_note">Примечание</label>
+            <input class="form-input" id="inp_att_note" placeholder="Причина отсутствия…"/>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('attModal')">Отмена</button>
+      <button class="btn btn-accent" id="attSubmitBtn" onclick="submitAtt()">Сохранить</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = '/api/v1/attendance';
+const SESS_API = '/api/v1/sessions';
+const DEP_API = '/api/v1/deputies';
+let records=[], sessions=[], deputies=[], editingId=null;
+
+const stMap = {
+  present: ['badge-success','Присутствовал'],
+  absent:  ['badge-error','Отсутствовал'],
+  excused: ['badge-warn','Уваж. причина']
+};
+
+async function init() {
+  [sessions, deputies] = await Promise.all([api('GET',SESS_API), api('GET',DEP_API)]);
+  // Fill filter selects
+  sessions.forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.id; o.textContent=`${s.held_on} — ${s.topic.substring(0,40)}`;
+    document.getElementById('filterSession').appendChild(o);
+  });
+  deputies.forEach(d=>{
+    const o=document.createElement('option');
+    o.value=d.id; o.textContent=d.full_name;
+    document.getElementById('filterDeputy').appendChild(o);
+  });
+  // Fill form selects
+  sessions.forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.id; o.textContent=`${s.held_on} — ${s.topic.substring(0,50)}`;
+    document.getElementById('inp_session_id').appendChild(o);
+  });
+  deputies.forEach(d=>{
+    const o=document.createElement('option');
+    o.value=d.id; o.textContent=d.full_name;
+    document.getElementById('inp_deputy_id').appendChild(o);
+  });
+  await loadData();
+}
+
+async function loadData() {
+  const sid=document.getElementById('filterSession').value;
+  const did=document.getElementById('filterDeputy').value;
+  const hasFilter=sid||did;
+  document.getElementById('resetBtn').style.display=hasFilter?'':'none';
+  let url=API+'?';
+  if(sid) url+=`session_id=${sid}&`;
+  if(did) url+=`deputy_id=${did}&`;
+  records = await api('GET', url);
+  // Stats
+  document.getElementById('cntPresent').textContent=records.filter(r=>r.status==='present').length;
+  document.getElementById('cntAbsent').textContent=records.filter(r=>r.status==='absent').length;
+  document.getElementById('cntExcused').textContent=records.filter(r=>r.status==='excused').length;
+  document.getElementById('totalBadge').textContent=records.length;
+  document.getElementById('resultsCount').textContent=`Записей: ${records.length}`;
+  renderTable();
+}
+
+function resetFilters() {
+  document.getElementById('filterSession').value='';
+  document.getElementById('filterDeputy').value='';
+  loadData();
+}
+
+const sessMap=()=>Object.fromEntries(sessions.map(s=>[s.id,s]));
+const depMap=()=>Object.fromEntries(deputies.map(d=>[d.id,d]));
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderTable() {
+  const tbody=document.getElementById('tbody');
+  const sm=sessMap(), dm=depMap();
+  if (!records.length) {
+    tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state">
+      <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <div class="empty-title">Записей не найдено</div>
+      <div class="empty-desc">Отметьте явку депутатов на заседание</div>
+      <button class="btn btn-accent" onclick="openCreate()">+ Отметить явку</button>
+    </div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML=records.map(r=>{
+    const dep=dm[r.deputy_id]||{};
+    const sess=sm[r.session_id]||{};
+    const [cls,label]=stMap[r.status]||['badge-neutral',r.status];
+    return `<tr>
+      <td>
+        <div class="deputy-cell">
+          <div class="avatar" style="width:30px;height:30px;font-size:11px;">${initials(dep.full_name||'')}</div>
+          <span style="font-weight:500;color:var(--n-900);">${esc(dep.full_name||'?')}</span>
+        </div>
+      </td>
+      <td style="font-size:13px;">
+        <div style="font-weight:500;color:var(--n-900);">${sess.held_on||'—'}</div>
+        <div style="color:var(--n-500);font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((sess.topic||'').substring(0,60))}</div>
+      </td>
+      <td><span class="badge ${cls}"><span class="badge-dot"></span>${label}</span></td>
+      <td class="text-muted">${r.note?esc(r.note):'—'}</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openEdit(${r.id})" title="Редактировать">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-danger-ghost btn-sm btn-icon" onclick="remove(${r.id})" title="Удалить">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openCreate() {
+  editingId=null;
+  document.getElementById('attForm').reset();
+  document.getElementById('sessionGroup').style.display='';
+  document.getElementById('deputyGroup').style.display='';
+  document.getElementById('attModalTitle').textContent='Отметить явку';
+  document.getElementById('attSubmitBtn').textContent='Сохранить';
+  openModal('attModal');
+}
+
+function openEdit(id) {
+  const r=records.find(x=>x.id===id);
+  editingId=id;
+  document.getElementById('attForm').reset();
+  document.getElementById('sessionGroup').style.display='none';
+  document.getElementById('deputyGroup').style.display='none';
+  document.getElementById('inp_att_status').value=r.status;
+  document.getElementById('inp_att_note').value=r.note||'';
+  document.getElementById('attModalTitle').textContent='Изменить запись явки';
+  document.getElementById('attSubmitBtn').textContent='Сохранить';
+  openModal('attModal');
+}
+
+async function submitAtt() {
+  const btn=document.getElementById('attSubmitBtn');
+  btn.disabled=true; btn.textContent='Сохранение…';
+  try {
+    if (editingId) {
+      await api('PATCH',`${API}/${editingId}`,{
+        status:document.getElementById('inp_att_status').value,
+        note:document.getElementById('inp_att_note').value.trim()||null
+      });
+      showToast('Запись обновлена');
+    } else {
+      const sessId=document.getElementById('inp_session_id').value;
+      const depId=document.getElementById('inp_deputy_id').value;
+      if(!sessId||!depId){showToast('Выберите заседание и депутата','warn');return;}
+      await api('POST',API,{
+        session_id:parseInt(sessId),deputy_id:parseInt(depId),
+        status:document.getElementById('inp_att_status').value,
+        note:document.getElementById('inp_att_note').value.trim()||null
+      });
+      showToast('Явка отмечена');
+    }
+    closeModal('attModal'); await loadData();
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='Сохранить';}
+}
+
+async function remove(id) {
+  const ok=await confirm2('Удалить запись?','Запись явки будет удалена из системы.');
+  if(!ok)return;
+  try{await api('DELETE',`${API}/${id}`);showToast('Запись удалена');await loadData();}
+  catch(e){showToast(e.message,'error');}
+}
+
+init();
+</script>
+{% endblock %}

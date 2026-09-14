@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Заседания — Городская Дума{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Главная</a>
+<span class="breadcrumb-sep">/</span>
+<span class="breadcrumb-current">Заседания</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Заседания <span id="totalBadge" style="display:inline-block;background:var(--navy-100);color:var(--navy-700);font-size:14px;font-weight:600;padding:2px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;"></span></h2>
+    <p class="page-header-sub">Плановые и проведённые заседания комиссий</p>
+  </div>
+  <div class="page-header-actions">
+    <button class="btn btn-accent" onclick="openCreate()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Создать заседание
+    </button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="search-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input class="search-input" type="search" id="searchInput" placeholder="Поиск по теме…" oninput="filterTable()" aria-label="Поиск заседаний"/>
+  </div>
+  <select class="filter-select" id="filterStatus" onchange="filterTable()" aria-label="Фильтр по статусу">
+    <option value="">Все статусы</option>
+    <option value="planned">Запланировано</option>
+    <option value="held">Проведено</option>
+    <option value="cancelled">Отменено</option>
+  </select>
+  <select class="filter-select" id="filterComm" onchange="filterTable()" aria-label="Фильтр по комиссии">
+    <option value="">Все комиссии</option>
+  </select>
+  <span class="results-count" id="resultsCount"></span>
+  <div class="toolbar-spacer"></div>
+  <button class="btn btn-ghost btn-sm" id="resetBtn" onclick="resetFilters()" style="display:none;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Сбросить
+  </button>
+</div>
+
+<div class="table-wrap">
+  <table aria-label="Список заседаний">
+    <thead>
+      <tr>
+        <th>Дата</th>
+        <th>Тема</th>
+        <th>Комиссия</th>
+        <th>Статус</th>
+        <th style="width:110px;"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="5"><div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+        <div class="skel" style="height:20px;width:55%;"></div>
+        <div class="skel" style="height:20px;width:80%;"></div>
+        <div class="skel" style="height:20px;width:65%;"></div>
+      </div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="sessModal" role="dialog" aria-modal="true" aria-labelledby="sessModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="sessModalTitle">Создать заседание</h3>
+      <button class="modal-close" onclick="closeModal('sessModal')" aria-label="Закрыть">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="sessForm" novalidate>
+        <div class="form-grid" style="gap:14px;">
+          <div class="form-group span-2">
+            <label class="form-label" for="inp_topic">Тема заседания<span class="req">*</span></label>
+            <input class="form-input" id="inp_topic" name="topic" placeholder="Обсуждение проекта бюджета…" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_commission_id">Комиссия<span class="req">*</span></label>
+            <select class="form-input form-select" id="inp_commission_id" name="commission_id" required>
+              <option value="">— выберите —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_held_on">Дата<span class="req">*</span></label>
+            <input class="form-input" type="date" id="inp_held_on" name="held_on" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_status">Статус</label>
+            <select class="form-input form-select" id="inp_status" name="status">
+              <option value="planned">Запланировано</option>
+              <option value="held">Проведено</option>
+              <option value="cancelled">Отменено</option>
+            </select>
+          </div>
+          <div class="form-group">
+          </div>
+          <div class="form-group span-2">
+            <label class="form-label" for="inp_notes">Примечания</label>
+            <textarea class="form-input form-textarea" id="inp_notes" name="notes" placeholder="Дополнительная информация…"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('sessModal')">Отмена</button>
+      <button class="btn btn-accent" id="sessSubmitBtn" onclick="submitSess()">Создать</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = '/api/v1/sessions';
+const COMM_API = '/api/v1/commissions';
+let sessions = [], commissions = [], editingId = null;
+
+const statusMap = {
+  planned: ['badge-info','Запланировано'],
+  held:    ['badge-success','Проведено'],
+  cancelled:['badge-neutral','Отменено']
+};
+
+async function load() {
+  [sessions, commissions] = await Promise.all([api('GET', API), api('GET', COMM_API)]);
+  fillCommSelect();
+  fillFilterComm();
+  filterTable();
+  document.getElementById('totalBadge').textContent = sessions.length;
+}
+
+function fillCommSelect() {
+  const sel = document.getElementById('inp_commission_id');
+  sel.innerHTML = '<option value="">— выберите —</option>';
+  commissions.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.name;
+    sel.appendChild(o);
+  });
+}
+
+function fillFilterComm() {
+  const sel = document.getElementById('filterComm');
+  sel.innerHTML = '<option value="">Все комиссии</option>';
+  commissions.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.name;
+    sel.appendChild(o);
+  });
+}
+
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const st = document.getElementById('filterStatus').value;
+  const cm = document.getElementById('filterComm').value;
+  const hasFilter = q||st||cm;
+  document.getElementById('resetBtn').style.display = hasFilter?'':'none';
+  const filtered = sessions.filter(s => {
+    const matchQ = !q || s.topic.toLowerCase().includes(q);
+    const matchSt = !st || s.status===st;
+    const matchCm = !cm || String(s.commission_id)===cm;
+    return matchQ&&matchSt&&matchCm;
+  });
+  document.getElementById('resultsCount').textContent = filtered.length!==sessions.length
+    ?`Найдено: ${filtered.length} из ${sessions.length}`:`Всего: ${sessions.length}`;
+  renderTable(filtered);
+}
+
+function resetFilters() {
+  document.getElementById('searchInput').value='';
+  document.getElementById('filterStatus').value='';
+  document.getElementById('filterComm').value='';
+  filterTable();
+}
+
+function commName(id) { const c=commissions.find(x=>x.id===id); return c?c.name:'—'; }
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tbody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+      <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+      <div class="empty-title">Заседания не найдены</div>
+      <div class="empty-desc">Создайте первое заседание</div>
+      <button class="btn btn-accent" onclick="openCreate()">+ Создать заседание</button>
+    </div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(s => {
+    const [cls,label] = statusMap[s.status]||['badge-neutral',s.status];
+    return `<tr>
+      <td style="white-space:nowrap;font-weight:500;color:var(--n-900);">${s.held_on}</td>
+      <td class="td-primary" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.topic)}</td>
+      <td style="color:var(--n-700);">${esc(commName(s.commission_id))}</td>
+      <td><span class="badge ${cls}"><span class="badge-dot"></span>${label}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openEdit(${s.id})" title="Редактировать">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-danger-ghost btn-sm btn-icon" onclick="remove(${s.id},'${esc(s.topic.substring(0,40))}')" title="Удалить">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function clearForm() { document.getElementById('sessForm').reset(); }
+
+function openCreate() {
+  editingId=null; clearForm();
+  document.getElementById('sessModalTitle').textContent='Создать заседание';
+  document.getElementById('sessSubmitBtn').textContent='Создать';
+  openModal('sessModal');
+}
+
+function openEdit(id) {
+  const s=sessions.find(x=>x.id===id);
+  editingId=id; clearForm();
+  document.getElementById('inp_topic').value=s.topic||'';
+  document.getElementById('inp_commission_id').value=s.commission_id||'';
+  document.getElementById('inp_held_on').value=s.held_on||'';
+  document.getElementById('inp_status').value=s.status||'planned';
+  document.getElementById('inp_notes').value=s.notes||'';
+  document.getElementById('sessModalTitle').textContent='Редактировать заседание';
+  document.getElementById('sessSubmitBtn').textContent='Сохранить';
+  openModal('sessModal');
+}
+
+async function submitSess() {
+  const topic=document.getElementById('inp_topic').value.trim();
+  const commId=document.getElementById('inp_commission_id').value;
+  const heldOn=document.getElementById('inp_held_on').value;
+  if(!topic||!commId||!heldOn) {
+    if(!topic) document.getElementById('inp_topic').classList.add('error');
+    if(!commId) document.getElementById('inp_commission_id').classList.add('error');
+    if(!heldOn) document.getElementById('inp_held_on').classList.add('error');
+    showToast('Заполните обязательные поля','warn');
+    return;
+  }
+  const body={commission_id:parseInt(commId),held_on:heldOn,topic,
+    status:document.getElementById('inp_status').value,
+    notes:document.getElementById('inp_notes').value.trim()||null};
+  const btn=document.getElementById('sessSubmitBtn');
+  btn.disabled=true; btn.textContent='Сохранение…';
+  try {
+    editingId?await api('PATCH',`${API}/${editingId}`,body):await api('POST',API,body);
+    showToast(editingId?'Заседание обновлено':'Заседание создано');
+    closeModal('sessModal'); await load();
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false;btn.textContent=editingId?'Сохранить':'Создать';}
+}
+
+async function remove(id,topic) {
+  const ok=await confirm2('Удалить заседание?',`"${topic}" и все записи явки будут удалены.`);
+  if(!ok)return;
+  try{await api('DELETE',`${API}/${id}`);showToast('Заседание удалено');await load();}
+  catch(e){showToast(e.message,'error');}
+}
+
+load();
+</script>
+{% endblock %}

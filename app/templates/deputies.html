@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Депутаты — Городская Дума{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Главная</a>
+<span class="breadcrumb-sep">/</span>
+<span class="breadcrumb-current">Депутаты</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Депутаты <span id="totalBadge" style="display:inline-block;background:var(--navy-100);color:var(--navy-700);font-size:14px;font-weight:600;padding:2px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;"></span></h2>
+    <p class="page-header-sub">Список членов городского совета</p>
+  </div>
+  <div class="page-header-actions">
+    <button class="btn btn-accent" onclick="openCreate()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Добавить депутата
+    </button>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <div class="search-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input class="search-input" type="search" id="searchInput" placeholder="Поиск по ФИО, партии, округу…" oninput="filterTable()" aria-label="Поиск депутатов"/>
+  </div>
+  <select class="filter-select" id="filterStatus" onchange="filterTable()" aria-label="Фильтр по статусу">
+    <option value="">Все статусы</option>
+    <option value="true">Активные</option>
+    <option value="false">Неактивные</option>
+  </select>
+  <select class="filter-select" id="filterParty" onchange="filterTable()" aria-label="Фильтр по партии">
+    <option value="">Все партии</option>
+  </select>
+  <span class="results-count" id="resultsCount"></span>
+  <div class="toolbar-spacer"></div>
+  <button class="btn btn-ghost btn-sm" id="resetBtn" onclick="resetFilters()" style="display:none;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Сбросить
+  </button>
+</div>
+
+<!-- Table -->
+<div class="table-wrap">
+  <table aria-label="Список депутатов">
+    <thead>
+      <tr>
+        <th>Депутат</th>
+        <th>Партия</th>
+        <th>Округ</th>
+        <th>Дата избрания</th>
+        <th>Статус</th>
+        <th style="width:110px;"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <!-- skeleton -->
+      <tr><td colspan="6"><div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+        <div class="skel" style="height:20px;width:60%;"></div>
+        <div class="skel" style="height:20px;width:45%;"></div>
+        <div class="skel" style="height:20px;width:70%;"></div>
+      </div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="depModal" role="dialog" aria-modal="true" aria-labelledby="depModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="depModalTitle">Добавить депутата</h3>
+      <button class="modal-close" onclick="closeModal('depModal')" aria-label="Закрыть">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="depForm" novalidate>
+        <div class="form-grid">
+          <div class="form-group span-2">
+            <label class="form-label" for="inp_full_name">ФИО<span class="req">*</span></label>
+            <input class="form-input" id="inp_full_name" name="full_name" placeholder="Иванов Иван Иванович" required/>
+            <span class="form-error-msg" id="err_full_name" style="display:none;">⚠ Введите полное имя</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_party">Партия</label>
+            <input class="form-input" id="inp_party" name="party" placeholder="Единая Россия"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_district">Округ</label>
+            <input class="form-input" id="inp_district" name="district" placeholder="Округ №1"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp_elected_on">Дата избрания</label>
+            <input class="form-input" type="date" id="inp_elected_on" name="elected_on"/>
+          </div>
+          <div class="form-group" style="justify-content:flex-end;padding-top:22px;">
+            <div class="form-checkbox-row">
+              <input class="form-checkbox" type="checkbox" id="inp_is_active" name="is_active" checked/>
+              <label class="form-label" for="inp_is_active" style="cursor:pointer;">Депутат активен</label>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('depModal')">Отмена</button>
+      <button class="btn btn-accent" id="depSubmitBtn" onclick="submitForm()">Сохранить</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = '/api/v1/deputies';
+let deputies = [];
+let editingId = null;
+
+async function load() {
+  deputies = await api('GET', API);
+  populatePartyFilter();
+  filterTable();
+}
+
+function populatePartyFilter() {
+  const sel = document.getElementById('filterParty');
+  const parties = [...new Set(deputies.map(d=>d.party).filter(Boolean))].sort();
+  parties.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const st = document.getElementById('filterStatus').value;
+  const pt = document.getElementById('filterParty').value;
+  const hasFilter = q || st || pt;
+  document.getElementById('resetBtn').style.display = hasFilter ? '' : 'none';
+
+  const filtered = deputies.filter(d => {
+    const matchQ = !q || (d.full_name+d.party+d.district).toLowerCase().includes(q);
+    const matchSt = !st || String(d.is_active) === st;
+    const matchPt = !pt || d.party === pt;
+    return matchQ && matchSt && matchPt;
+  });
+
+  document.getElementById('resultsCount').textContent = filtered.length !== deputies.length
+    ? `Найдено: ${filtered.length} из ${deputies.length}` : `Всего: ${deputies.length}`;
+  document.getElementById('totalBadge').textContent = deputies.length;
+  renderTable(filtered);
+}
+
+function resetFilters() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('filterStatus').value = '';
+  document.getElementById('filterParty').value = '';
+  filterTable();
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tbody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state">
+        <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div class="empty-title">Депутаты не найдены</div>
+        <div class="empty-desc">Попробуйте изменить параметры поиска или добавьте нового депутата</div>
+        <button class="btn btn-accent" onclick="openCreate()">+ Добавить депутата</button>
+      </div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(d => `
+    <tr>
+      <td>
+        <div class="deputy-cell">
+          <div class="avatar" style="background:${avatarBg(d.full_name)};color:var(--navy-700);">${initials(d.full_name)}</div>
+          <span class="td-primary">${esc(d.full_name)}</span>
+        </div>
+      </td>
+      <td>${d.party ? esc(d.party) : '<span class="text-muted">—</span>'}</td>
+      <td>${d.district ? esc(d.district) : '<span class="text-muted">—</span>'}</td>
+      <td class="text-muted">${d.elected_on || '—'}</td>
+      <td>
+        <span class="badge ${d.is_active ? 'badge-success' : 'badge-neutral'}">
+          <span class="badge-dot"></span>
+          ${d.is_active ? 'Активен' : 'Неактивен'}
+        </span>
+      </td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openEdit(${d.id})" title="Редактировать" aria-label="Редактировать ${esc(d.full_name)}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-danger-ghost btn-sm btn-icon" onclick="remove(${d.id}, '${esc(d.full_name)}')" title="Удалить" aria-label="Удалить ${esc(d.full_name)}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function avatarBg(name) {
+  const colors = ['#D6E4FF','#FEF3C7','#DCFCE7','#EDE9FE','#FCE7F3','#DBEAFE'];
+  let h = 0; for(const c of name) h = ((h<<5)-h)+c.charCodeAt(0);
+  return colors[Math.abs(h) % colors.length];
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function clearForm() {
+  document.getElementById('depForm').reset();
+  document.getElementById('inp_is_active').checked = true;
+  document.getElementById('err_full_name').style.display = 'none';
+  document.querySelectorAll('.form-input.error').forEach(el=>el.classList.remove('error'));
+}
+
+function openCreate() {
+  editingId = null;
+  clearForm();
+  document.getElementById('depModalTitle').textContent = 'Добавить депутата';
+  document.getElementById('depSubmitBtn').textContent = 'Добавить';
+  openModal('depModal');
+}
+
+function openEdit(id) {
+  const d = deputies.find(x=>x.id===id);
+  editingId = id;
+  clearForm();
+  document.getElementById('inp_full_name').value = d.full_name || '';
+  document.getElementById('inp_party').value = d.party || '';
+  document.getElementById('inp_district').value = d.district || '';
+  document.getElementById('inp_elected_on').value = d.elected_on || '';
+  document.getElementById('inp_is_active').checked = d.is_active;
+  document.getElementById('depModalTitle').textContent = 'Редактировать депутата';
+  document.getElementById('depSubmitBtn').textContent = 'Сохранить';
+  openModal('depModal');
+}
+
+async function submitForm() {
+  const name = document.getElementById('inp_full_name').value.trim();
+  if (!name) {
+    document.getElementById('inp_full_name').classList.add('error');
+    document.getElementById('err_full_name').style.display = 'flex';
+    document.getElementById('inp_full_name').focus();
+    return;
+  }
+  const body = {
+    full_name: name,
+    party: document.getElementById('inp_party').value.trim() || null,
+    district: document.getElementById('inp_district').value.trim() || null,
+    elected_on: document.getElementById('inp_elected_on').value || null,
+    is_active: document.getElementById('inp_is_active').checked,
+  };
+  const btn = document.getElementById('depSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Сохранение…';
+  try {
+    if (editingId) {
+      await api('PATCH', `${API}/${editingId}`, body);
+      showToast('Данные депутата обновлены');
+    } else {
+      await api('POST', API, body);
+      showToast('Депутат добавлен');
+    }
+    closeModal('depModal');
+    await load();
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = editingId ? 'Сохранить' : 'Добавить';
+  }
+}
+
+async function remove(id, name) {
+  const ok = await confirm2(`Удалить депутата?`, `"${name}" будет удалён из системы. Это действие нельзя отменить.`);
+  if (!ok) return;
+  try {
+    await api('DELETE', `${API}/${id}`);
+    showToast('Депутат удалён');
+    await load();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// Inline validation
+document.getElementById('inp_full_name').addEventListener('blur', function() {
+  if (!this.value.trim()) {
+    this.classList.add('error');
+    document.getElementById('err_full_name').style.display = 'flex';
+  } else {
+    this.classList.remove('error');
+    document.getElementById('err_full_name').style.display = 'none';
+  }
+});
+
+load();
+</script>
+{% endblock %}
