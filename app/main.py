@@ -45,24 +45,24 @@ async def health():
 # ─── Web UI routes ────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @app.get("/ui/deputies", response_class=HTMLResponse)
 async def ui_deputies(request: Request):
-    return templates.TemplateResponse("deputies.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="deputies.html")
 
 
 @app.get("/ui/commissions", response_class=HTMLResponse)
 async def ui_commissions(request: Request):
-    return templates.TemplateResponse("commissions.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="commissions.html")
 
 
 @app.get("/ui/sessions", response_class=HTMLResponse)
 async def ui_sessions(request: Request):
-    return templates.TemplateResponse("sessions.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="sessions.html")
 
 
 @app.get("/ui/attendance", response_class=HTMLResponse)
 async def ui_attendance(request: Request):
-    return templates.TemplateResponse("attendance.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="attendance.html")

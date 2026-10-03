@@ -1,0 +1,18 @@
+[Unit]
+Description=City Duma Management System (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=duma-app
+Group=duma-app
+WorkingDirectory=/opt/cityduma
+
+EnvironmentFile=/etc/cityduma/cityduma.env
+ExecStart=/opt/cityduma/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
