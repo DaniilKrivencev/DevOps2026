@@ -26,7 +26,7 @@ from app.database import Base
 pytestmark = pytest.mark.integration
 
 LAB3_DIR = Path(__file__).resolve().parents[2]
-EXPECTED_REVISIONS = ["0001", "0002", "0003"]
+EXPECTED_REVISIONS = ["0001", "0002", "0003", "0004"]
 
 
 def _alembic_config(url: str) -> Config:
@@ -69,10 +69,11 @@ def test_clean_database_upgrade(sqlite_db):
         "commission_members",
         "sessions",
         "attendances",
+        "agenda_items",
         "alembic_version",
     } <= _tables(path)
     with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0003"
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0004"
 
 
 def test_upgrade_database_with_existing_data(sqlite_db):
@@ -103,6 +104,9 @@ def test_upgrade_database_with_existing_data(sqlite_db):
         ]
         assert conn.execute("SELECT count(*) FROM commission_members").fetchone()[0] == 1
         assert conn.execute("SELECT topic FROM sessions").fetchone()[0] == "Тема"
+        # новая таблица работает со старыми данными
+        conn.execute("INSERT INTO agenda_items (session_id, position, title) VALUES (1, 1, 'П1')")
+        assert conn.execute("SELECT decision FROM agenda_items").fetchone()[0] == "pending"
 
 
 def test_unique_email_enforced_after_migration(sqlite_db):
@@ -121,12 +125,13 @@ def test_downgrade_to_base_and_upgrade_again(sqlite_db):
     cfg = _alembic_config(url)
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "0002")
+    assert "agenda_items" not in _tables(path)
     assert "is_active" not in _columns(path, "commissions")
     assert "email" in _columns(path, "deputies")
     command.downgrade(cfg, "base")
     assert _tables(path) <= {"alembic_version"}
     command.upgrade(cfg, "head")
-    assert "is_active" in _columns(path, "commissions")
+    assert "agenda_items" in _tables(path)
 
 
 def test_migrations_match_models(sqlite_db):
@@ -160,5 +165,5 @@ def test_postgres_clean_upgrade_and_downgrade():
         await engine.dispose()
         return value
 
-    assert asyncio.run(_version()) == "0003"
+    assert asyncio.run(_version()) == "0004"
     command.downgrade(cfg, "base")

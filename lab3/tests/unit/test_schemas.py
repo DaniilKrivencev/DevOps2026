@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
+    AgendaItemCreate,
     AttendanceCreate,
     CommissionCreate,
     DeputyCreate,
@@ -87,3 +88,19 @@ def test_attendance_note_length_boundary():
     AttendanceCreate(session_id=1, deputy_id=1, note="x" * 300)
     with pytest.raises(ValidationError):
         AttendanceCreate(session_id=1, deputy_id=1, note="x" * 301)
+
+
+@pytest.mark.parametrize("position", [0, -1, 1000])
+def test_agenda_position_out_of_range(position):
+    with pytest.raises(ValidationError):
+        AgendaItemCreate(position=position, title="Пункт")
+
+
+@pytest.mark.parametrize("position", [1, 999])
+def test_agenda_position_boundaries(position):
+    assert AgendaItemCreate(position=position, title=" Пункт ").title == "Пункт"
+
+
+def test_agenda_blank_title_rejected():
+    with pytest.raises(ValidationError):
+        AgendaItemCreate(position=1, title="   ")

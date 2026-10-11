@@ -22,7 +22,7 @@ async def test_openapi_docs_available(client):
     assert r.status_code == 200
     paths = r.json()["paths"]
     assert "/api/v1/deputies/" in paths
-    assert "/api/v1/sessions/{session_id}" in paths
+    assert "/api/v1/sessions/{session_id}/agenda" in paths
     assert (await client.get("/docs")).status_code == 200
 
 

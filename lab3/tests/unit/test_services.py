@@ -6,11 +6,12 @@
 
 import pytest
 
-from app.models import AttendanceStatus
+from app.models import AgendaDecision, AttendanceStatus, SessionStatus
 from app.services import (
     MAX_FULL_NAME_LENGTH,
     attendance_rate,
     chair_allowed,
+    decision_allowed,
     has_quorum,
     normalize_full_name,
     quorum_threshold,
@@ -143,3 +144,18 @@ def test_attendance_rate_rounding():
 
 def test_attendance_rate_all_present():
     assert attendance_rate([AttendanceStatus.present] * 3) == 100.0
+
+
+# ─── Решения по повестке ──────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("status", list(SessionStatus))
+def test_pending_decision_always_allowed(status):
+    assert decision_allowed(status, AgendaDecision.pending) is True
+
+
+@pytest.mark.parametrize("decision", [AgendaDecision.adopted, AgendaDecision.rejected])
+def test_final_decision_only_for_held_session(decision):
+    assert decision_allowed(SessionStatus.held, decision) is True
+    assert decision_allowed(SessionStatus.planned, decision) is False
+    assert decision_allowed(SessionStatus.cancelled, decision) is False
