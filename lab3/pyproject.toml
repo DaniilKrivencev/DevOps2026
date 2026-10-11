@@ -24,8 +24,17 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "S"]
+ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-# Обоснование: conftest выставляет APP_ENV=test до импорта приложения (E402).
-"tests/conftest.py" = ["E402"]
+# Обоснование: в тестах assert — основной механизм проверки (S101),
+# а conftest выставляет APP_ENV=test до импорта приложения (E402).
+"tests/**" = ["S101"]
+"tests/conftest.py" = ["S101", "E402"]
+# Обоснование: FastAPI использует вызов Depends() в значениях по умолчанию (B008).
+"app/routers/*.py" = ["B008"]
+"app/main.py" = ["B008"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
