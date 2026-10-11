@@ -21,7 +21,8 @@ def has_quorum(present: int, total_members: int) -> bool:
         raise ValueError("counts must be non-negative")
     if present > total_members:
         raise ValueError("present cannot exceed total members")
-    return total_members > 0 and present * 2 > total_members
+    # при total_members == 0 present тоже 0, и 0 > 0 — False: пустая комиссия без кворума
+    return present * 2 > total_members
 
 
 def quorum_threshold(total_members: int) -> int:

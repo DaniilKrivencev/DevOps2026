@@ -3,7 +3,8 @@
 # Единый локальный проверочный контур: make verify
 # =============================================================================
 
-.PHONY: help setup install run lint format test test-unit test-integration test-pg \
+.PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
+        mutation \
         migrate migrate-down migrate-status migrate-new migrate-check \
         seed backup restore restore-demo verify clean
 
@@ -11,6 +12,9 @@ VENV    := .venv
 PY      := $(shell [ -x $(VENV)/bin/python ] && echo $(VENV)/bin/python || echo python3)
 REPORTS := reports
 SRC     := app scripts tests alembic
+
+# Пороги. Снижать запрещено — проверяет scripts/check_policy.py
+MUTATION_MIN := 90
 
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
@@ -41,6 +45,16 @@ format: ## Автоисправление форматирования
 	$(PY) -m ruff check --fix $(SRC)
 	$(PY) -m ruff format $(SRC)
 
+sast: ## Статический анализ безопасности (bandit), отчёт в reports/
+	@echo "$(GREEN)▶ bandit (SAST)$(RESET)"
+	@mkdir -p $(REPORTS)
+	$(PY) -m bandit -c pyproject.toml -r app scripts -f json -o $(REPORTS)/bandit.json -q || true
+	$(PY) -m bandit -c pyproject.toml -r app scripts
+
+policy: ## Запрет пропуска тестов, снижения порогов и исключений без обоснования
+	@echo "$(GREEN)▶ Проверка правил проекта$(RESET)"
+	$(PY) scripts/check_policy.py
+
 # ─── Тесты ───────────────────────────────────────────────────────────────────
 test: ## Все тесты + отчёты (JUnit, покрытие HTML/XML) с порогом покрытия
 	@echo "$(GREEN)▶ pytest (unit + integration)$(RESET)"
@@ -57,6 +71,13 @@ test-integration: ## Только интеграционные тесты (БД,
 test-pg: ## Тесты на PostgreSQL (нужен TEST_DATABASE_URL=postgresql+asyncpg://...)
 	@if [ -z "$$TEST_DATABASE_URL" ]; then echo "$(RED)✗ задайте TEST_DATABASE_URL$(RESET)"; exit 1; fi
 	$(PY) -m pytest
+
+mutation: ## Мутационное тестирование бизнес-правил (mutmut), порог MUTATION_MIN
+	@echo "$(GREEN)▶ mutmut: app/services.py$(RESET)"
+	@mkdir -p $(REPORTS) && rm -f .mutmut-cache
+	-$(PY) -m mutmut run --paths-to-mutate app/services.py --tests-dir tests/unit \
+	  --runner "$(PY) -m pytest -x -q -p no:cacheprovider tests/unit" > $(REPORTS)/mutmut.log 2>&1
+	$(PY) scripts/check_mutation.py $(MUTATION_MIN)
 
 # ─── Миграции ────────────────────────────────────────────────────────────────
 migrate: ## Применить все миграции (alembic upgrade head)
@@ -94,13 +115,16 @@ restore-demo: ## Демонстрация: бэкап → удаление/по�
 	PY=$(PY) ./scripts/restore_demo.sh
 
 # ─── Единая проверка ─────────────────────────────────────────────────────────
-verify: ## Обязательный набор проверок: lint, migrate-check, тесты с порогом покрытия
+verify: ## ВЕСЬ обязательный набор проверок: policy, lint, sast, migrate-check, test, mutation
 	@echo "$(GREEN)══════ make verify ══════$(RESET)"
+	@$(MAKE) --no-print-directory policy
 	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory sast
 	@$(MAKE) --no-print-directory migrate-check
 	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory mutation
 	@echo "$(GREEN)  отчёты: $(REPORTS)/junit.xml, $(REPORTS)/htmlcov/index.html$(RESET)"
 	@echo "$(GREEN)══════ ✔ Все проверки пройдены ══════$(RESET)"
 
 clean: ## Удалить отчёты и кэши
-	rm -rf $(REPORTS) .pytest_cache .ruff_cache .coverage
+	rm -rf $(REPORTS) .pytest_cache .ruff_cache .coverage .mutmut-cache
