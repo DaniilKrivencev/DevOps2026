@@ -3,7 +3,7 @@
 # Единый локальный проверочный контур: make verify
 # =============================================================================
 
-.PHONY: help setup install run lint format test test-unit test-integration test-pg \
+.PHONY: help setup install run lint format sast test test-unit test-integration test-pg \
         migrate migrate-down migrate-status migrate-new migrate-check \
         seed backup restore restore-demo verify clean
 
@@ -40,6 +40,12 @@ lint: ## Линтер и проверка форматирования (ruff)
 format: ## Автоисправление форматирования
 	$(PY) -m ruff check --fix $(SRC)
 	$(PY) -m ruff format $(SRC)
+
+sast: ## Статический анализ безопасности (bandit), отчёт в reports/
+	@echo "$(GREEN)▶ bandit (SAST)$(RESET)"
+	@mkdir -p $(REPORTS)
+	$(PY) -m bandit -c pyproject.toml -r app scripts -f json -o $(REPORTS)/bandit.json -q || true
+	$(PY) -m bandit -c pyproject.toml -r app scripts
 
 # ─── Тесты ───────────────────────────────────────────────────────────────────
 test: ## Все тесты + отчёты (JUnit, покрытие HTML/XML) с порогом покрытия
@@ -94,9 +100,10 @@ restore-demo: ## Демонстрация: бэкап → удаление/по�
 	PY=$(PY) ./scripts/restore_demo.sh
 
 # ─── Единая проверка ─────────────────────────────────────────────────────────
-verify: ## Обязательный набор проверок: lint, migrate-check, тесты с порогом покрытия
+verify: ## Обязательный набор проверок: lint, sast, migrate-check, тесты с порогом покрытия
 	@echo "$(GREEN)══════ make verify ══════$(RESET)"
 	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory sast
 	@$(MAKE) --no-print-directory migrate-check
 	@$(MAKE) --no-print-directory test
 	@echo "$(GREEN)  отчёты: $(REPORTS)/junit.xml, $(REPORTS)/htmlcov/index.html$(RESET)"
