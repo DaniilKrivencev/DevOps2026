@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+    "unit: чистая логика без БД",
+    "integration: тесты с реальной БД (SQLite/PostgreSQL) и миграциями",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Обоснование: conftest выставляет APP_ENV=test до импорта приложения (E402).
+"tests/conftest.py" = ["E402"]
