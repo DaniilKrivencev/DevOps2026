@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}Комиссии — Городская Дума{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Главная</a>
+<span class="breadcrumb-sep">/</span>
+<span class="breadcrumb-current">Комиссии</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Комиссии <span id="totalBadge" style="display:inline-block;background:var(--navy-100);color:var(--navy-700);font-size:14px;font-weight:600;padding:2px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;"></span></h2>
+    <p class="page-header-sub">Постоянные комиссии городского совета</p>
+  </div>
+  <div class="page-header-actions">
+    <button class="btn btn-accent" onclick="openCreate()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Создать комиссию
+    </button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="search-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input class="search-input" type="search" id="searchInput" placeholder="Поиск по названию…" oninput="filterTable()" aria-label="Поиск комиссий"/>
+  </div>
+  <span class="results-count" id="resultsCount"></span>
+</div>
+
+<!-- Cards grid -->
+<div id="cardGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+  <!-- skeleton -->
+  <div class="card"><div class="card-body"><div class="skel" style="height:20px;width:80%;margin-bottom:12px;"></div><div class="skel" style="height:14px;width:100%;margin-bottom:6px;"></div><div class="skel" style="height:14px;width:60%;"></div></div></div>
+  <div class="card"><div class="card-body"><div class="skel" style="height:20px;width:70%;margin-bottom:12px;"></div><div class="skel" style="height:14px;width:90%;margin-bottom:6px;"></div><div class="skel" style="height:14px;width:50%;"></div></div></div>
+</div>
+
+<!-- Commission Modal -->
+<div class="modal-overlay" id="commModal" role="dialog" aria-modal="true" aria-labelledby="commModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="commModalTitle">Создать комиссию</h3>
+      <button class="modal-close" onclick="closeModal('commModal')" aria-label="Закрыть">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="commForm" novalidate class="form-grid cols-1" style="gap:14px;">
+        <div class="form-group">
+          <label class="form-label" for="inp_name">Название<span class="req">*</span></label>
+          <input class="form-input" id="inp_name" name="name" placeholder="Комиссия по бюджету" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inp_description">Описание</label>
+          <textarea class="form-input form-textarea" id="inp_description" name="description" placeholder="Краткое описание задач комиссии…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inp_chair_id">Председатель</label>
+          <select class="form-input form-select" id="inp_chair_id" name="chair_id">
+            <option value="">— не назначен —</option>
+          </select>
+          <span class="form-hint">Председатель должен быть членом комиссии</span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('commModal')">Отмена</button>
+      <button class="btn btn-accent" id="commSubmitBtn" onclick="submitComm()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Members Modal -->
+<div class="modal-overlay modal-lg" id="membersModal" role="dialog" aria-modal="true" aria-labelledby="membersModalTitle">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="membersModalTitle">Состав комиссии</h3>
+      <button class="modal-close" onclick="closeModal('membersModal')" aria-label="Закрыть">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="membersBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = '/api/v1/commissions';
+const DEP_API = '/api/v1/deputies';
+let commissions = [], deputies = [], editingId = null, activeMembersCommId = null;
+
+const cardColors = ['#1A3A7C','#7C3AED','#059669','#B45309','#DC2626','#0891B2','#4F46E5'];
+
+async function load() {
+  [commissions, deputies] = await Promise.all([api('GET', API), api('GET', DEP_API)]);
+  fillDepSelect();
+  filterCards();
+  document.getElementById('totalBadge').textContent = commissions.length;
+}
+
+function fillDepSelect() {
+  const sel = document.getElementById('inp_chair_id');
+  sel.innerHTML = '<option value="">— не назначен —</option>';
+  deputies.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.full_name;
+    sel.appendChild(o);
+  });
+}
+
+function filterCards() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = commissions.filter(c => !q || c.name.toLowerCase().includes(q));
+  document.getElementById('resultsCount').textContent = filtered.length !== commissions.length
+    ? `Найдено: ${filtered.length} из ${commissions.length}` : `Всего: ${commissions.length}`;
+  renderCards(filtered);
+}
+
+function depName(id) { const d = deputies.find(x=>x.id===id); return d ? d.full_name : '—'; }
+
+function renderCards(data) {
+  const grid = document.getElementById('cardGrid');
+  if (!data.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;"><div class="empty-state">
+      <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <div class="empty-title">Комиссии не найдены</div>
+      <div class="empty-desc">Создайте первую комиссию</div>
+      <button class="btn btn-accent" onclick="openCreate()">+ Создать комиссию</button>
+    </div></div>`;
+    return;
+  }
+  grid.style.gridTemplateColumns = 'repeat(3,1fr)';
+  grid.innerHTML = data.map((c, i) => {
+    const col = cardColors[i % cardColors.length];
+    const chair = c.chair_id ? depName(c.chair_id) : null;
+    return `<div class="card" style="overflow:hidden;transition:box-shadow 150ms;" onmouseover="this.style.boxShadow='var(--sh-md)'" onmouseout="this.style.boxShadow=''">
+      <div style="height:5px;background:${col};"></div>
+      <div class="card-body">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:16px;font-weight:700;color:var(--n-900);margin-bottom:6px;">${esc(c.name)}</div>
+          <div style="font-size:13px;color:var(--n-500);line-height:1.5;min-height:38px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${c.description ? esc(c.description) : 'Описание не указано'}</div>
+        </div>
+        <hr class="separator"/>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--n-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/><path d="M12 22v-4"/><path d="M12 14v-4"/><path d="M8 22H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h4"/><path d="M16 22h4a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-4"/></svg>
+            <span style="color:var(--n-500);">Председатель:</span>
+            <span style="color:var(--n-900);font-weight:500;">${chair ? esc(chair) : '<span style="color:var(--n-400);">не назначен</span>'}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="openMembers(${c.id})" style="flex:1;justify-content:center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Состав
+          </button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openEdit(${c.id})" title="Редактировать">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-danger-ghost btn-sm btn-icon" onclick="remove(${c.id},'${esc(c.name)}')" title="Удалить">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function clearForm() { document.getElementById('commForm').reset(); }
+
+function openCreate() {
+  editingId = null; clearForm();
+  document.getElementById('commModalTitle').textContent = 'Создать комиссию';
+  document.getElementById('commSubmitBtn').textContent = 'Создать';
+  openModal('commModal');
+}
+
+function openEdit(id) {
+  const c = commissions.find(x=>x.id===id);
+  editingId = id; clearForm();
+  document.getElementById('inp_name').value = c.name || '';
+  document.getElementById('inp_description').value = c.description || '';
+  document.getElementById('inp_chair_id').value = c.chair_id || '';
+  document.getElementById('commModalTitle').textContent = 'Редактировать комиссию';
+  document.getElementById('commSubmitBtn').textContent = 'Сохранить';
+  openModal('commModal');
+}
+
+async function submitComm() {
+  const name = document.getElementById('inp_name').value.trim();
+  if (!name) { document.getElementById('inp_name').classList.add('error'); document.getElementById('inp_name').focus(); return; }
+  const body = {
+    name,
+    description: document.getElementById('inp_description').value.trim() || null,
+    chair_id: document.getElementById('inp_chair_id').value ? parseInt(document.getElementById('inp_chair_id').value) : null,
+  };
+  const btn = document.getElementById('commSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Сохранение…';
+  try {
+    editingId ? await api('PATCH', `${API}/${editingId}`, body) : await api('POST', API, body);
+    showToast(editingId ? 'Комиссия обновлена' : 'Комиссия создана');
+    closeModal('commModal');
+    await load();
+  } catch(e) { showToast(e.message,'error'); }
+  finally { btn.disabled=false; btn.textContent = editingId?'Сохранить':'Создать'; }
+}
+
+async function remove(id, name) {
+  const ok = await confirm2('Удалить комиссию?', `"${name}" и все её заседания будут удалены.`);
+  if (!ok) return;
+  try { await api('DELETE', `${API}/${id}`); showToast('Комиссия удалена'); await load(); }
+  catch(e) { showToast(e.message,'error'); }
+}
+
+async function openMembers(id) {
+  activeMembersCommId = id;
+  const comm = commissions.find(c=>c.id===id);
+  document.getElementById('membersModalTitle').textContent = `Состав: ${comm.name}`;
+  document.getElementById('membersBody').innerHTML = '<div style="text-align:center;padding:24px;color:var(--n-500);">Загрузка…</div>';
+  openModal('membersModal');
+  await loadMembers(id);
+}
+
+async function loadMembers(id) {
+  const members = await api('GET', `${API}/${id}/members`);
+  const depMap = Object.fromEntries(deputies.map(d=>[d.id,d]));
+  const comm = commissions.find(c=>c.id===id);
+  const memberIds = new Set(members.map(m=>m.deputy_id));
+  const nonMembers = deputies.filter(d=>!memberIds.has(d.id));
+
+  let rows = members.length
+    ? members.map(m => {
+        const dep = depMap[m.deputy_id] || {};
+        const isChair = comm.chair_id === m.deputy_id;
+        return `<tr style="border-bottom:1px solid var(--n-100);">
+          <td style="padding:11px 14px;">
+            <div class="deputy-cell">
+              <div class="avatar" style="width:30px;height:30px;font-size:11px;">${initials(dep.full_name||'')}</div>
+              <span style="font-weight:500;color:var(--n-900);">${esc(dep.full_name||'?')}</span>
+              ${isChair ? '<span class="badge badge-warn" style="margin-left:6px;">Председатель</span>' : ''}
+            </div>
+          </td>
+          <td style="padding:11px 14px;color:var(--n-500);font-size:13px;">${m.joined_on||'—'}</td>
+          <td style="padding:11px 14px;">
+            ${isChair
+              ? `<span style="font-size:12px;color:var(--n-400);">Сначала сменить председателя</span>`
+              : `<button class="btn btn-danger-ghost btn-sm" onclick="removeMember(${id},${m.deputy_id})">Удалить</button>`}
+          </td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="3" style="padding:32px;text-align:center;color:var(--n-500);">Нет членов</td></tr>`;
+
+  const depOptions = nonMembers.map(d=>`<option value="${d.id}">${esc(d.full_name)}</option>`).join('');
+
+  document.getElementById('membersBody').innerHTML = `
+    <div class="table-wrap" style="margin-bottom:18px;">
+      <table>
+        <thead><tr>
+          <th>Депутат</th><th>Вступил</th><th style="width:130px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <hr class="separator"/>
+    <div class="section-label">Добавить члена</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;">
+      <div class="form-group" style="flex:1;">
+        <label class="form-label" for="newMemberDep">Депутат</label>
+        <select class="form-input form-select" id="newMemberDep" ${!nonMembers.length ? 'disabled' : ''}>
+          ${depOptions || '<option>Все депутаты уже в составе</option>'}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="newMemberDate">Дата вступления</label>
+        <input class="form-input" type="date" id="newMemberDate"/>
+      </div>
+      <button class="btn btn-accent" onclick="addMember(${id})" ${!nonMembers.length ? 'disabled' : ''}>Добавить</button>
+    </div>`;
+}
+
+async function addMember(id) {
+  const depId = parseInt(document.getElementById('newMemberDep').value);
+  const joinedOn = document.getElementById('newMemberDate').value || null;
+  if (!depId) return;
+  try {
+    await api('POST', `${API}/${id}/members`, {deputy_id:depId, joined_on:joinedOn});
+    showToast('Депутат добавлен в состав');
+    await loadMembers(id);
+    await load();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function removeMember(commId, depId) {
+  const ok = await confirm2('Удалить из состава?', 'Депутат будет исключён из комиссии.');
+  if (!ok) return;
+  try {
+    await api('DELETE', `${API}/${commId}/members/${depId}`);
+    showToast('Депутат исключён из комиссии');
+    await loadMembers(commId);
+    await load();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+load();
+</script>
+{% endblock %}
