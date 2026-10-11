@@ -35,7 +35,17 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    if connection.dialect.name == "sqlite":
+        # batch-миграции в SQLite пересоздают таблицы (DROP + RENAME). При включённых
+        # внешних ключах DROP deputies срабатывал как ON DELETE SET NULL и обнулял
+        # commissions.chair_id — потеря данных, найденная тестом миграции с данными.
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        render_as_batch=connection.dialect.name == "sqlite",
+    )
     with context.begin_transaction():
         context.run_migrations()
 

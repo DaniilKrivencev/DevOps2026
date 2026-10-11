@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,7 +59,12 @@ class Deputy(Base):
     district: Mapped[str | None] = mapped_column(String(100))
     elected_on: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # ЛР3, миграция 0002: контактные данные
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    phone: Mapped[str | None] = mapped_column(String(20))
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Reverse relations
     chaired_commissions: Mapped[list[Commission]] = relationship(
@@ -84,11 +90,17 @@ class Commission(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    # ЛР3, миграция 0003: архивные комиссии не удаляются, а деактивируются
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     # Business rule: chair MUST be a member of the commission (enforced in API)
     chair_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("deputies.id", ondelete="SET NULL")
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     chair: Mapped[Deputy | None] = relationship(
         "Deputy", back_populates="chaired_commissions", foreign_keys=[chair_id]
@@ -136,13 +148,15 @@ class Session(Base):
     commission_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("commissions.id", ondelete="CASCADE"), nullable=False
     )
-    held_on: Mapped[date] = mapped_column(Date, nullable=False)
+    held_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     topic: Mapped[str] = mapped_column(String(500), nullable=False)
     status: Mapped[SessionStatus] = mapped_column(
         Enum(SessionStatus), default=SessionStatus.planned, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     commission: Mapped[Commission] = relationship("Commission", back_populates="sessions")
     attendances: Mapped[list[Attendance]] = relationship(
