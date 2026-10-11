@@ -6,12 +6,13 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models import AttendanceStatus, SessionStatus
+from app.models import AgendaDecision, AttendanceStatus, SessionStatus
 from app.services import normalize_full_name
 
 # Простая проверка формата e-mail без внешних зависимостей
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 PHONE_PATTERN = r"^\+?[0-9\-\s()]{5,20}$"
+
 
 # ─── Deputy ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,35 @@ class AttendanceOut(BaseModel):
     deputy_id: int
     status: AttendanceStatus
     note: str | None
+
+
+# ─── AgendaItem (ЛР3) ─────────────────────────────────────────────────────────
+
+
+class AgendaItemCreate(BaseModel):
+    position: int = Field(ge=1, le=999)
+    title: str = Field(min_length=1, max_length=300)
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("title must not be empty")
+        return v.strip()
+
+
+class AgendaItemUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    decision: AgendaDecision | None = None
+
+
+class AgendaItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    session_id: int
+    position: int
+    title: str
+    decision: AgendaDecision
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────

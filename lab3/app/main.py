@@ -9,9 +9,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.routers import attendance, commissions, deputies, sessions
+from app.routers import agenda, attendance, commissions, deputies, sessions
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 
 app = FastAPI(
     title="Городская Дума",
@@ -24,6 +24,7 @@ app.include_router(deputies.router, prefix="/api/v1")
 app.include_router(commissions.router, prefix="/api/v1")
 app.include_router(sessions.router, prefix="/api/v1")
 app.include_router(attendance.router, prefix="/api/v1")
+app.include_router(agenda.router, prefix="/api/v1")
 
 # ─── Templates ────────────────────────────────────────────────────────────────
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
