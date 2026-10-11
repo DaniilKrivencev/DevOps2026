@@ -1,29 +1,26 @@
 """Alembic environment — async engine, reads DATABASE_URL from environment."""
 
 import asyncio
-import os
 from logging.config import fileConfig
 
-from alembic import context
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine
 
-load_dotenv()
+import app.models  # noqa: F401 — импорт регистрирует модели в Base.metadata
+from alembic import context
+from app.config import get_database_url
+from app.database import Base
 
 # Alembic Config object
 config = context.config
 
-# Setup Python logging from alembic.ini
+# Setup Python logging from alembic.ini (не отключая логгеры pytest)
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-# Import all models so Alembic knows about them
-from app.database import Base  # noqa: F401, E402
-import app.models  # noqa: F401, E402
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+# URL можно передать программно (тесты миграций): config.attributes["database_url"]
+DATABASE_URL = config.attributes.get("database_url") or get_database_url()
 
 
 def run_migrations_offline() -> None:

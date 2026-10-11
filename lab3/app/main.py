@@ -2,16 +2,16 @@
 
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db, engine
-from app.routers import deputies, commissions, sessions, attendance
+from app.database import get_db
+from app.routers import attendance, commissions, deputies, sessions
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 
 app = FastAPI(
     title="Городская Дума",
@@ -31,13 +31,12 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 @app.get("/health", tags=["system"])
-async def health():
+async def health(db: AsyncSession = Depends(get_db)):
     """Service health check — проверяет соединение с БД."""
     db_status = "ok"
     try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except Exception as exc:
+        await db.execute(text("SELECT 1"))
+    except Exception as exc:  # health должен отвечать даже при недоступной БД
         db_status = f"error: {exc}"
     return {"status": "ok", "database": db_status, "version": APP_VERSION}
 
