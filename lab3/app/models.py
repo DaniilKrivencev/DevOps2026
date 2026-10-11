@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -87,6 +88,10 @@ class Commission(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    # ЛР3, миграция 0003: архивные комиссии не удаляются, а деактивируются
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     # Business rule: chair MUST be a member of the commission (enforced in API)
     chair_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("deputies.id", ondelete="SET NULL")
@@ -139,7 +144,7 @@ class Session(Base):
     commission_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("commissions.id", ondelete="CASCADE"), nullable=False
     )
-    held_on: Mapped[date] = mapped_column(Date, nullable=False)
+    held_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     topic: Mapped[str] = mapped_column(String(500), nullable=False)
     status: Mapped[SessionStatus] = mapped_column(
         Enum(SessionStatus), default=SessionStatus.planned, nullable=False
