@@ -20,6 +20,8 @@ async def test_create_and_get_deputy(client):
         "party": "Партия",
         "district": "№1",
         "elected_on": "2025-09-14",
+        "email": "ivanov@duma.ru",
+        "phone": "+7 900 000-00-00",
     }
     r = await client.post(API, json=payload)
     assert r.status_code == 201
@@ -30,7 +32,7 @@ async def test_create_and_get_deputy(client):
 
     r = await client.get(f"{API}{created['id']}")
     assert r.status_code == 200
-    assert r.json()["full_name"] == "Иванов Иван Иванович"
+    assert r.json()["email"] == "ivanov@duma.ru"
 
 
 async def test_create_deputy_empty_name(client):
@@ -41,6 +43,19 @@ async def test_create_deputy_empty_name(client):
 async def test_create_deputy_missing_name(client):
     r = await client.post(API, json={"party": "Без имени"})
     assert r.status_code == 422
+
+
+async def test_duplicate_email_conflict(client, make_deputy):
+    await make_deputy(email="same@duma.ru")
+    r = await client.post(API, json={"full_name": "Другой", "email": "same@duma.ru"})
+    assert r.status_code == 409
+
+
+async def test_update_to_duplicate_email_conflict(client, make_deputy):
+    await make_deputy(email="first@duma.ru")
+    second = await make_deputy(email="second@duma.ru")
+    r = await client.patch(f"{API}{second['id']}", json={"email": "first@duma.ru"})
+    assert r.status_code == 409
 
 
 async def test_list_deputies_ordered(client, make_deputy):

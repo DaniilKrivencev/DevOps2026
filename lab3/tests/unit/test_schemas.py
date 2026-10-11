@@ -30,6 +30,28 @@ def test_deputy_name_length_boundary():
         DeputyCreate(full_name="А" * 201)
 
 
+@pytest.mark.parametrize("email", ["ivanov@duma.ru", "a.b@c.org"])
+def test_deputy_valid_email(email):
+    assert DeputyCreate(full_name="Иванов", email=email).email == email
+
+
+@pytest.mark.parametrize("email", ["ivanov", "ivanov@", "@duma.ru", "a b@c.ru", "a@b"])
+def test_deputy_invalid_email(email):
+    with pytest.raises(ValidationError):
+        DeputyCreate(full_name="Иванов", email=email)
+
+
+@pytest.mark.parametrize("phone", ["+7 (900) 123-45-67", "12345"])
+def test_deputy_valid_phone(phone):
+    assert DeputyCreate(full_name="Иванов", phone=phone).phone == phone
+
+
+@pytest.mark.parametrize("phone", ["1234", "phone", "+7" + "1" * 30])
+def test_deputy_invalid_phone(phone):
+    with pytest.raises(ValidationError):
+        DeputyCreate(full_name="Иванов", phone=phone)
+
+
 def test_deputy_update_blank_name_rejected():
     with pytest.raises(ValidationError):
         DeputyUpdate(full_name="  ")
