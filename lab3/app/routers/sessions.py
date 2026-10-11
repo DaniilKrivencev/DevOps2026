@@ -5,8 +5,6 @@ Business rule:
   (more than 50% of commission members have 'present' attendance).
 """
 
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +16,7 @@ from app.schemas import SessionCreate, SessionOut, SessionUpdate
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-@router.get("/", response_model=List[SessionOut])
+@router.get("/", response_model=list[SessionOut])
 async def list_sessions(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Session).order_by(Session.held_on.desc()))
     return result.scalars().all()
@@ -42,9 +40,7 @@ async def get_session(session_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{session_id}", response_model=SessionOut)
-async def update_session(
-    session_id: int, data: SessionUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_session(session_id: int, data: SessionUpdate, db: AsyncSession = Depends(get_db)):
     session = await db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -54,9 +50,7 @@ async def update_session(
     # Business rule: quorum check when marking session as 'held'
     if update_data.get("status") == SessionStatus.held:
         total_result = await db.execute(
-            select(func.count()).where(
-                CommissionMember.commission_id == session.commission_id
-            )
+            select(func.count()).where(CommissionMember.commission_id == session.commission_id)
         )
         total_members = total_result.scalar() or 0
 

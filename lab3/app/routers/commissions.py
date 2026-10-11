@@ -4,9 +4,7 @@ Business rule enforced here:
   - The chairperson of a commission must be a member of that commission.
 """
 
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +24,7 @@ router = APIRouter(prefix="/commissions", tags=["commissions"])
 # ─── Commission CRUD ──────────────────────────────────────────────────────────
 
 
-@router.get("/", response_model=List[CommissionOut])
+@router.get("/", response_model=list[CommissionOut])
 async def list_commissions(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Commission).order_by(Commission.id))
     return result.scalars().all()
@@ -100,12 +98,10 @@ async def delete_commission(commission_id: int, db: AsyncSession = Depends(get_d
 # ─── Membership ───────────────────────────────────────────────────────────────
 
 
-@router.get("/{commission_id}/members", response_model=List[CommissionMemberOut])
+@router.get("/{commission_id}/members", response_model=list[CommissionMemberOut])
 async def list_members(commission_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(CommissionMember).where(
-            CommissionMember.commission_id == commission_id
-        )
+        select(CommissionMember).where(CommissionMember.commission_id == commission_id)
     )
     return result.scalars().all()
 
@@ -151,9 +147,7 @@ async def add_member(
     "/{commission_id}/members/{deputy_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def remove_member(
-    commission_id: int, deputy_id: int, db: AsyncSession = Depends(get_db)
-):
+async def remove_member(commission_id: int, deputy_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(CommissionMember).where(
         CommissionMember.commission_id == commission_id,
         CommissionMember.deputy_id == deputy_id,

@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models import AttendanceStatus, SessionStatus
-
 
 # ─── Deputy ──────────────────────────────────────────────────────────────────
 
 
 class DeputyBase(BaseModel):
     full_name: str
-    party: Optional[str] = None
-    district: Optional[str] = None
-    elected_on: Optional[date] = None
+    party: str | None = None
+    district: str | None = None
+    elected_on: date | None = None
     is_active: bool = True
 
 
@@ -31,11 +29,11 @@ class DeputyCreate(DeputyBase):
 
 
 class DeputyUpdate(BaseModel):
-    full_name: Optional[str] = None
-    party: Optional[str] = None
-    district: Optional[str] = None
-    elected_on: Optional[date] = None
-    is_active: Optional[bool] = None
+    full_name: str | None = None
+    party: str | None = None
+    district: str | None = None
+    elected_on: date | None = None
+    is_active: bool | None = None
 
 
 class DeputyOut(DeputyBase):
@@ -49,8 +47,8 @@ class DeputyOut(DeputyBase):
 
 class CommissionBase(BaseModel):
     name: str
-    description: Optional[str] = None
-    chair_id: Optional[int] = None
+    description: str | None = None
+    chair_id: int | None = None
 
 
 class CommissionCreate(CommissionBase):
@@ -63,9 +61,9 @@ class CommissionCreate(CommissionBase):
 
 
 class CommissionUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    chair_id: Optional[int] = None
+    name: str | None = None
+    description: str | None = None
+    chair_id: int | None = None
 
 
 class CommissionOut(CommissionBase):
@@ -79,7 +77,7 @@ class CommissionOut(CommissionBase):
 
 class CommissionMemberCreate(BaseModel):
     deputy_id: int
-    joined_on: Optional[date] = None
+    joined_on: date | None = None
 
 
 class CommissionMemberOut(BaseModel):
@@ -87,7 +85,7 @@ class CommissionMemberOut(BaseModel):
     id: int
     commission_id: int
     deputy_id: int
-    joined_on: Optional[date]
+    joined_on: date | None
 
 
 # ─── Session ─────────────────────────────────────────────────────────────────
@@ -98,7 +96,7 @@ class SessionBase(BaseModel):
     held_on: date
     topic: str
     status: SessionStatus = SessionStatus.planned
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class SessionCreate(SessionBase):
@@ -111,10 +109,10 @@ class SessionCreate(SessionBase):
 
 
 class SessionUpdate(BaseModel):
-    held_on: Optional[date] = None
-    topic: Optional[str] = None
-    status: Optional[SessionStatus] = None
-    notes: Optional[str] = None
+    held_on: date | None = None
+    topic: str | None = None
+    status: SessionStatus | None = None
+    notes: str | None = None
 
 
 class SessionOut(SessionBase):
@@ -130,12 +128,12 @@ class AttendanceCreate(BaseModel):
     session_id: int
     deputy_id: int
     status: AttendanceStatus = AttendanceStatus.present
-    note: Optional[str] = None
+    note: str | None = None
 
 
 class AttendanceUpdate(BaseModel):
-    status: Optional[AttendanceStatus] = None
-    note: Optional[str] = None
+    status: AttendanceStatus | None = None
+    note: str | None = None
 
 
 class AttendanceOut(BaseModel):
@@ -144,7 +142,7 @@ class AttendanceOut(BaseModel):
     session_id: int
     deputy_id: int
     status: AttendanceStatus
-    note: Optional[str]
+    note: str | None
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────

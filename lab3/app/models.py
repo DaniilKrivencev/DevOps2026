@@ -29,7 +29,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-
 # ─── Enumerations ─────────────────────────────────────────────────────────────
 
 
@@ -59,9 +58,7 @@ class Deputy(Base):
     district: Mapped[str | None] = mapped_column(String(100))
     elected_on: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Reverse relations
     chaired_commissions: Mapped[list[Commission]] = relationship(
@@ -70,9 +67,7 @@ class Deputy(Base):
     memberships: Mapped[list[CommissionMember]] = relationship(
         "CommissionMember", back_populates="deputy"
     )
-    attendances: Mapped[list[Attendance]] = relationship(
-        "Attendance", back_populates="deputy"
-    )
+    attendances: Mapped[list[Attendance]] = relationship("Attendance", back_populates="deputy")
 
     def __repr__(self) -> str:
         return f"<Deputy id={self.id} name={self.full_name!r}>"
@@ -93,9 +88,7 @@ class Commission(Base):
     chair_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("deputies.id", ondelete="SET NULL")
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chair: Mapped[Deputy | None] = relationship(
         "Deputy", back_populates="chaired_commissions", foreign_keys=[chair_id]
@@ -103,9 +96,7 @@ class Commission(Base):
     members: Mapped[list[CommissionMember]] = relationship(
         "CommissionMember", back_populates="commission", cascade="all, delete-orphan"
     )
-    sessions: Mapped[list[Session]] = relationship(
-        "Session", back_populates="commission"
-    )
+    sessions: Mapped[list[Session]] = relationship("Session", back_populates="commission")
 
     def __repr__(self) -> str:
         return f"<Commission id={self.id} name={self.name!r}>"
@@ -129,9 +120,7 @@ class CommissionMember(Base):
     )
     joined_on: Mapped[date | None] = mapped_column(Date)
 
-    commission: Mapped[Commission] = relationship(
-        "Commission", back_populates="members"
-    )
+    commission: Mapped[Commission] = relationship("Commission", back_populates="members")
     deputy: Mapped[Deputy] = relationship("Deputy", back_populates="memberships")
 
 
@@ -153,13 +142,9 @@ class Session(Base):
         Enum(SessionStatus), default=SessionStatus.planned, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    commission: Mapped[Commission] = relationship(
-        "Commission", back_populates="sessions"
-    )
+    commission: Mapped[Commission] = relationship("Commission", back_populates="sessions")
     attendances: Mapped[list[Attendance]] = relationship(
         "Attendance", back_populates="session", cascade="all, delete-orphan"
     )
