@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from app.models import AttendanceStatus
+from app.models import AgendaDecision, AttendanceStatus, SessionStatus
 
 MAX_FULL_NAME_LENGTH = 200
 
@@ -54,3 +54,10 @@ def attendance_rate(statuses: Iterable[AttendanceStatus]) -> float:
         return 0.0
     present = sum(1 for s in items if s == AttendanceStatus.present)
     return round(present * 100 / len(items), 2)
+
+
+def decision_allowed(session_status: SessionStatus, decision: AgendaDecision) -> bool:
+    """Решение по пункту повестки можно принять только на проведённом заседании."""
+    if decision == AgendaDecision.pending:
+        return True
+    return session_status == SessionStatus.held
