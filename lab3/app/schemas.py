@@ -57,6 +57,7 @@ class CommissionBase(BaseModel):
     name: str
     description: str | None = None
     chair_id: int | None = None
+    is_active: bool = True
 
 
 class CommissionCreate(CommissionBase):
@@ -72,6 +73,7 @@ class CommissionUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     chair_id: int | None = None
+    is_active: bool | None = None
 
 
 class CommissionOut(CommissionBase):
