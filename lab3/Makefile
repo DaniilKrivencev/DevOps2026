@@ -4,7 +4,7 @@
 # =============================================================================
 
 .PHONY: help setup install run lint format test migrate migrate-down migrate-status \
-        migrate-new backup restore verify clean
+        migrate-new migrate-check backup restore verify clean
 
 VENV    := .venv
 PY      := $(shell [ -x $(VENV)/bin/python ] && echo $(VENV)/bin/python || echo python3)
@@ -59,6 +59,12 @@ migrate-status: ## Текущая ревизия и история миграц�
 migrate-new: ## Создать миграцию: make migrate-new MSG="описание"
 	$(PY) -m alembic revision --autogenerate -m "$(MSG)"
 
+migrate-check: ## Чистая БД с нуля + проверка, что модели совпадают с миграциями
+	@echo "$(GREEN)▶ Миграции на чистой БД + alembic check$(RESET)"
+	@mkdir -p $(REPORTS) && rm -f $(REPORTS)/migrate_check.db
+	APP_ENV=development DATABASE_URL=sqlite+aiosqlite:///./$(REPORTS)/migrate_check.db \
+	  sh -c '$(PY) -m alembic upgrade head && $(PY) -m alembic check'
+
 # ─── Резервное копирование ───────────────────────────────────────────────────
 backup: ## Резервная копия БД в backups/ (pg_dump или копия SQLite)
 	$(PY) -m scripts.db_backup backup
@@ -72,6 +78,7 @@ restore: ## Восстановление: make restore BACKUP=backups/dump_xxx.s
 verify: ## Обязательный набор проверок
 	@echo "$(GREEN)══════ make verify ══════$(RESET)"
 	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory migrate-check
 	@$(MAKE) --no-print-directory test
 	@echo "$(GREEN)══════ ✔ Все проверки пройдены ══════$(RESET)"
 

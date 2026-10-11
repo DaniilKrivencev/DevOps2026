@@ -47,7 +47,7 @@ class DeputyUpdate(BaseModel):
 class DeputyOut(DeputyBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 # ─── Commission ───────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ class CommissionUpdate(BaseModel):
 class CommissionOut(CommissionBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 # ─── CommissionMember ─────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ class SessionUpdate(BaseModel):
 class SessionOut(SessionBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 # ─── Attendance ───────────────────────────────────────────────────────────────
