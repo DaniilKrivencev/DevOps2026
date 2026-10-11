@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import AttendanceStatus, SessionStatus
+
+# Простая проверка формата e-mail без внешних зависимостей
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+PHONE_PATTERN = r"^\+?[0-9\-\s()]{5,20}$"
 
 # ─── Deputy ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +21,8 @@ class DeputyBase(BaseModel):
     district: str | None = None
     elected_on: date | None = None
     is_active: bool = True
+    email: str | None = Field(default=None, max_length=254, pattern=EMAIL_PATTERN)
+    phone: str | None = Field(default=None, max_length=20, pattern=PHONE_PATTERN)
 
 
 class DeputyCreate(DeputyBase):
@@ -34,12 +40,14 @@ class DeputyUpdate(BaseModel):
     district: str | None = None
     elected_on: date | None = None
     is_active: bool | None = None
+    email: str | None = Field(default=None, max_length=254, pattern=EMAIL_PATTERN)
+    phone: str | None = Field(default=None, max_length=20, pattern=PHONE_PATTERN)
 
 
 class DeputyOut(DeputyBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 # ─── Commission ───────────────────────────────────────────────────────────────
@@ -49,6 +57,7 @@ class CommissionBase(BaseModel):
     name: str
     description: str | None = None
     chair_id: int | None = None
+    is_active: bool = True
 
 
 class CommissionCreate(CommissionBase):
@@ -64,12 +73,13 @@ class CommissionUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     chair_id: int | None = None
+    is_active: bool | None = None
 
 
 class CommissionOut(CommissionBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 # ─── CommissionMember ─────────────────────────────────────────────────────────
@@ -118,7 +128,7 @@ class SessionUpdate(BaseModel):
 class SessionOut(SessionBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 # ─── Attendance ───────────────────────────────────────────────────────────────

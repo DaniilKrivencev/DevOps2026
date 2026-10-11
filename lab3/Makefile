@@ -4,7 +4,8 @@
 # =============================================================================
 
 .PHONY: help setup install run lint format test migrate migrate-down migrate-status \
-        migrate-new verify clean
+        migrate-new migrate-check \
+        seed backup restore restore-demo verify clean
 
 VENV    := .venv
 PY      := $(shell [ -x $(VENV)/bin/python ] && echo $(VENV)/bin/python || echo python3)
@@ -33,12 +34,12 @@ run: ## Запустить приложение на http://localhost:8000
 # ─── Качество кода ───────────────────────────────────────────────────────────
 lint: ## Линтер и проверка форматирования (ruff)
 	@echo "$(GREEN)▶ ruff check + ruff format --check$(RESET)"
-	$(PY) -m ruff check app tests alembic
-	$(PY) -m ruff format --check app tests alembic
+	$(PY) -m ruff check $(SRC)
+	$(PY) -m ruff format --check $(SRC)
 
 format: ## Автоисправление форматирования
-	$(PY) -m ruff check --fix app tests alembic
-	$(PY) -m ruff format app tests alembic
+	$(PY) -m ruff check --fix $(SRC)
+	$(PY) -m ruff format $(SRC)
 
 # ─── Тесты ───────────────────────────────────────────────────────────────────
 test: ## Запуск тестов
@@ -59,10 +60,32 @@ migrate-status: ## Текущая ревизия и история миграц�
 migrate-new: ## Создать миграцию: make migrate-new MSG="описание"
 	$(PY) -m alembic revision --autogenerate -m "$(MSG)"
 
+migrate-check: ## Чистая БД с нуля + проверка, что модели совпадают с миграциями
+	@echo "$(GREEN)▶ Миграции на чистой БД + alembic check$(RESET)"
+	@mkdir -p $(REPORTS) && rm -f $(REPORTS)/migrate_check.db
+	APP_ENV=development DATABASE_URL=sqlite+aiosqlite:///./$(REPORTS)/migrate_check.db \
+	  sh -c '$(PY) -m alembic upgrade head && $(PY) -m alembic check'
+
+seed: ## Наполнить БД демонстрационными данными
+	$(PY) -m scripts.seed
+
+# ─── Резервное копирование ───────────────────────────────────────────────────
+backup: ## Резервная копия БД в backups/ (pg_dump или копия SQLite)
+	$(PY) -m scripts.db_backup backup
+
+restore: ## Восстановление: make restore BACKUP=backups/dump_xxx.sql
+	@if [ -z "$(BACKUP)" ]; then \
+	  echo "$(RED)✗ Укажите файл: make restore BACKUP=backups/dump_xxx.sql$(RESET)"; exit 1; fi
+	$(PY) -m scripts.db_backup restore $(BACKUP)
+
+restore-demo: ## Демонстрация: бэкап → удаление/порча данных → восстановление
+	PY=$(PY) ./scripts/restore_demo.sh
+
 # ─── Единая проверка ─────────────────────────────────────────────────────────
 verify: ## Обязательный набор проверок
 	@echo "$(GREEN)══════ make verify ══════$(RESET)"
 	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory migrate-check
 	@$(MAKE) --no-print-directory test
 	@echo "$(GREEN)══════ ✔ Все проверки пройдены ══════$(RESET)"
 
