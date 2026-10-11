@@ -58,6 +58,9 @@ class Deputy(Base):
     district: Mapped[str | None] = mapped_column(String(100))
     elected_on: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # ЛР3, миграция 0002: контактные данные
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    phone: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Reverse relations
