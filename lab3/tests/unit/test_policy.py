@@ -1,10 +1,11 @@
 """Тесты самой политики (п. 14): нарушения действительно обнаруживаются."""
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 
-from scripts import check_policy
+from scripts import check_mutation, check_policy
 
 pytestmark = pytest.mark.unit
 
@@ -51,6 +52,11 @@ def test_lowered_coverage_threshold_detected(monkeypatch):
     assert any("fail_under" in e for e in check_policy.check_pyproject())
 
 
+def test_lowered_mutation_threshold_detected(monkeypatch):
+    monkeypatch.setattr(check_policy, "MIN_MUTATION_SCORE", 1000)
+    assert any("MUTATION_MIN" in e for e in check_policy.check_makefile())
+
+
 def test_new_ruff_ignore_detected(monkeypatch):
     monkeypatch.setattr(check_policy, "ALLOWED_PER_FILE_IGNORES", {})
     monkeypatch.setattr(check_policy, "ALLOWED_RUFF_IGNORES", ["E501"])
@@ -68,3 +74,33 @@ def test_main_reports_violations(monkeypatch, capsys):
     monkeypatch.setattr(check_policy, "MIN_COVERAGE", 101)
     assert check_policy.main() == 1
     assert "Нарушения правил проекта" in capsys.readouterr().out
+
+
+# ─── Порог мутационного тестирования ──────────────────────────────────────────
+
+
+def _mutmut_cache(path: Path, killed: int, survived: int) -> None:
+    with sqlite3.connect(path / ".mutmut-cache") as conn:
+        conn.execute("CREATE TABLE Mutant (id INTEGER, status TEXT)")
+        conn.executemany(
+            "INSERT INTO Mutant VALUES (?, ?)",
+            [(i, "ok_killed") for i in range(killed)]
+            + [(i, "bad_survived") for i in range(survived)],
+        )
+
+
+def test_mutation_score_above_threshold(tmp_path, monkeypatch):
+    _mutmut_cache(tmp_path, killed=9, survived=1)
+    monkeypatch.chdir(tmp_path)
+    assert check_mutation.main(["x", "90"]) == 0
+
+
+def test_mutation_score_below_threshold(tmp_path, monkeypatch):
+    _mutmut_cache(tmp_path, killed=8, survived=2)
+    monkeypatch.chdir(tmp_path)
+    assert check_mutation.main(["x", "90"]) == 1
+
+
+def test_mutation_cache_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert check_mutation.main(["x"]) == 1
