@@ -68,12 +68,17 @@ class Deputy(Base):
 
     # Reverse relations
     chaired_commissions: Mapped[list[Commission]] = relationship(
-        "Commission", back_populates="chair", foreign_keys="Commission.chair_id"
+        "Commission",
+        back_populates="chair",
+        foreign_keys="Commission.chair_id",
+        passive_deletes=True,  # ON DELETE SET NULL выполняет БД
     )
     memberships: Mapped[list[CommissionMember]] = relationship(
-        "CommissionMember", back_populates="deputy"
+        "CommissionMember", back_populates="deputy", passive_deletes=True
     )
-    attendances: Mapped[list[Attendance]] = relationship("Attendance", back_populates="deputy")
+    attendances: Mapped[list[Attendance]] = relationship(
+        "Attendance", back_populates="deputy", passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         return f"<Deputy id={self.id} name={self.full_name!r}>"
@@ -108,7 +113,10 @@ class Commission(Base):
     members: Mapped[list[CommissionMember]] = relationship(
         "CommissionMember", back_populates="commission", cascade="all, delete-orphan"
     )
-    sessions: Mapped[list[Session]] = relationship("Session", back_populates="commission")
+    # ЛР3: без passive_deletes ORM пыталась обнулить commission_id (NOT NULL) → 500
+    sessions: Mapped[list[Session]] = relationship(
+        "Session", back_populates="commission", passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         return f"<Commission id={self.id} name={self.name!r}>"

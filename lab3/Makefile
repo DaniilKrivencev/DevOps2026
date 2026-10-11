@@ -3,8 +3,8 @@
 # Единый локальный проверочный контур: make verify
 # =============================================================================
 
-.PHONY: help setup install run lint format test migrate migrate-down migrate-status \
-        migrate-new migrate-check \
+.PHONY: help setup install run lint format test test-unit test-integration test-pg \
+        migrate migrate-down migrate-status migrate-new migrate-check \
         seed backup restore restore-demo verify clean
 
 VENV    := .venv
@@ -42,8 +42,20 @@ format: ## Автоисправление форматирования
 	$(PY) -m ruff format $(SRC)
 
 # ─── Тесты ───────────────────────────────────────────────────────────────────
-test: ## Запуск тестов
-	@echo "$(GREEN)▶ pytest$(RESET)"
+test: ## Все тесты + отчёты (JUnit, покрытие HTML/XML) с порогом покрытия
+	@echo "$(GREEN)▶ pytest (unit + integration)$(RESET)"
+	@mkdir -p $(REPORTS)
+	$(PY) -m pytest --cov --cov-report=term --cov-report=html:$(REPORTS)/htmlcov \
+	  --cov-report=xml:$(REPORTS)/coverage.xml --junitxml=$(REPORTS)/junit.xml
+
+test-unit: ## Только unit-тесты
+	$(PY) -m pytest -m unit
+
+test-integration: ## Только интеграционные тесты (БД, миграции, бэкапы)
+	$(PY) -m pytest -m integration
+
+test-pg: ## Тесты на PostgreSQL (нужен TEST_DATABASE_URL=postgresql+asyncpg://...)
+	@if [ -z "$$TEST_DATABASE_URL" ]; then echo "$(RED)✗ задайте TEST_DATABASE_URL$(RESET)"; exit 1; fi
 	$(PY) -m pytest
 
 # ─── Миграции ────────────────────────────────────────────────────────────────
@@ -82,11 +94,12 @@ restore-demo: ## Демонстрация: бэкап → удаление/по�
 	PY=$(PY) ./scripts/restore_demo.sh
 
 # ─── Единая проверка ─────────────────────────────────────────────────────────
-verify: ## Обязательный набор проверок
+verify: ## Обязательный набор проверок: lint, migrate-check, тесты с порогом покрытия
 	@echo "$(GREEN)══════ make verify ══════$(RESET)"
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory migrate-check
 	@$(MAKE) --no-print-directory test
+	@echo "$(GREEN)  отчёты: $(REPORTS)/junit.xml, $(REPORTS)/htmlcov/index.html$(RESET)"
 	@echo "$(GREEN)══════ ✔ Все проверки пройдены ══════$(RESET)"
 
 clean: ## Удалить отчёты и кэши
