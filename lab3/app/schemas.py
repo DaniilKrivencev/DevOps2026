@@ -7,6 +7,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import AttendanceStatus, SessionStatus
+from app.services import normalize_full_name
 
 # Простая проверка формата e-mail без внешних зависимостей
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -16,9 +17,9 @@ PHONE_PATTERN = r"^\+?[0-9\-\s()]{5,20}$"
 
 
 class DeputyBase(BaseModel):
-    full_name: str
-    party: str | None = None
-    district: str | None = None
+    full_name: str = Field(max_length=200)
+    party: str | None = Field(default=None, max_length=100)
+    district: str | None = Field(default=None, max_length=100)
     elected_on: date | None = None
     is_active: bool = True
     email: str | None = Field(default=None, max_length=254, pattern=EMAIL_PATTERN)
@@ -29,19 +30,22 @@ class DeputyCreate(DeputyBase):
     @field_validator("full_name")
     @classmethod
     def name_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("full_name must not be empty")
-        return v.strip()
+        return normalize_full_name(v)
 
 
 class DeputyUpdate(BaseModel):
-    full_name: str | None = None
-    party: str | None = None
-    district: str | None = None
+    full_name: str | None = Field(default=None, max_length=200)
+    party: str | None = Field(default=None, max_length=100)
+    district: str | None = Field(default=None, max_length=100)
     elected_on: date | None = None
     is_active: bool | None = None
     email: str | None = Field(default=None, max_length=254, pattern=EMAIL_PATTERN)
     phone: str | None = Field(default=None, max_length=20, pattern=PHONE_PATTERN)
+
+    @field_validator("full_name")
+    @classmethod
+    def name_not_empty(cls, v: str | None) -> str | None:
+        return None if v is None else normalize_full_name(v)
 
 
 class DeputyOut(DeputyBase):
@@ -54,7 +58,7 @@ class DeputyOut(DeputyBase):
 
 
 class CommissionBase(BaseModel):
-    name: str
+    name: str = Field(max_length=200)
     description: str | None = None
     chair_id: int | None = None
     is_active: bool = True
@@ -70,7 +74,7 @@ class CommissionCreate(CommissionBase):
 
 
 class CommissionUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=200)
     description: str | None = None
     chair_id: int | None = None
     is_active: bool | None = None
@@ -104,7 +108,7 @@ class CommissionMemberOut(BaseModel):
 class SessionBase(BaseModel):
     commission_id: int
     held_on: date
-    topic: str
+    topic: str = Field(max_length=500)
     status: SessionStatus = SessionStatus.planned
     notes: str | None = None
 
@@ -120,7 +124,7 @@ class SessionCreate(SessionBase):
 
 class SessionUpdate(BaseModel):
     held_on: date | None = None
-    topic: str | None = None
+    topic: str | None = Field(default=None, max_length=500)
     status: SessionStatus | None = None
     notes: str | None = None
 
@@ -138,12 +142,12 @@ class AttendanceCreate(BaseModel):
     session_id: int
     deputy_id: int
     status: AttendanceStatus = AttendanceStatus.present
-    note: str | None = None
+    note: str | None = Field(default=None, max_length=300)
 
 
 class AttendanceUpdate(BaseModel):
     status: AttendanceStatus | None = None
-    note: str | None = None
+    note: str | None = Field(default=None, max_length=300)
 
 
 class AttendanceOut(BaseModel):
