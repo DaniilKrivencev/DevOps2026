@@ -44,9 +44,16 @@ def test_has_quorum_boundaries(present, total, expected):
     assert has_quorum(present, total) is expected
 
 
-@pytest.mark.parametrize(("present", "total"), [(-1, 5), (1, -1), (6, 5)])
-def test_has_quorum_rejects_invalid_counts(present, total):
-    with pytest.raises(ValueError):
+@pytest.mark.parametrize(
+    ("present", "total", "message"),
+    [
+        (-1, 5, "^counts must be non-negative$"),
+        (1, -1, "^counts must be non-negative$"),
+        (6, 5, "^present cannot exceed total members$"),
+    ],
+)
+def test_has_quorum_rejects_invalid_counts(present, total, message):
+    with pytest.raises(ValueError, match=message):
         has_quorum(present, total)
 
 
@@ -65,7 +72,7 @@ def test_quorum_threshold_is_consistent_with_has_quorum():
 
 
 def test_quorum_threshold_negative():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="^total_members must be non-negative$"):
         quorum_threshold(-1)
 
 
@@ -97,14 +104,18 @@ def test_normalize_full_name_collapses_spaces():
 
 @pytest.mark.parametrize("value", ["", "   ", "\t\n"])
 def test_normalize_full_name_empty(value):
-    with pytest.raises(ValueError, match="empty"):
+    with pytest.raises(ValueError, match="^full_name must not be empty$"):
         normalize_full_name(value)
+
+
+def test_max_full_name_length_matches_db_column():
+    assert MAX_FULL_NAME_LENGTH == 200  # deputies.full_name VARCHAR(200)
 
 
 def test_normalize_full_name_max_length_boundary():
     exact = "Я" * MAX_FULL_NAME_LENGTH
     assert normalize_full_name(exact) == exact
-    with pytest.raises(ValueError, match="at most"):
+    with pytest.raises(ValueError, match="^full_name must be at most 200 characters$"):
         normalize_full_name(exact + "Я")
 
 

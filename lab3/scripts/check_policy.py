@@ -3,7 +3,7 @@
 Запрещено без обоснования:
   1. пропускать тесты: pytest.mark.skip / skipif / xfail / pytest.skip(...)
      — допускается только если reason содержит слово «обоснование»;
-  2. снижать пороги: покрытие (fail_under) ниже базового;
+  2. снижать пороги: покрытие (fail_under) и мутационный порог ниже базовых;
   3. добавлять исключения анализаторов: `# noqa` / `# nosec` без кода правила
      и без пояснения (в той же строке после кода или комментарием строкой выше),
      новые ignore/per-file-ignores в ruff, отключение тестов bandit (skips).
@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECK_DIRS = ["app", "scripts", "tests", "alembic"]
 
 MIN_COVERAGE = 85
+MIN_MUTATION_SCORE = 90
 ALLOWED_RUFF_IGNORES: list[str] = []
 ALLOWED_PER_FILE_IGNORES = {
     "tests/**": ["S101"],
@@ -30,7 +31,7 @@ ALLOWED_PER_FILE_IGNORES = {
     "app/routers/*.py": ["B008"],
     "app/main.py": ["B008"],
 }
-REQUIRED_VERIFY_STEPS = ["policy", "lint", "sast", "test", "migrate-check"]
+REQUIRED_VERIFY_STEPS = ["policy", "lint", "sast", "test", "mutation", "migrate-check"]
 
 SKIP_RE = re.compile(r"pytest\.(mark\.(skip|skipif|xfail)\b|skip\(|xfail\()")
 SUPPRESS_RE = re.compile(r"#\s*(noqa|nosec)\b(?P<rest>.*)$", re.IGNORECASE)
@@ -97,6 +98,9 @@ def check_makefile() -> list[str]:
         for step in REQUIRED_VERIFY_STEPS
         if not re.search(rf"\b{re.escape(step)}\b", body)
     ]
+    mutation = re.search(r"MUTATION_MIN\s*:?=\s*(\d+)", text)
+    if not mutation or int(mutation.group(1)) < MIN_MUTATION_SCORE:
+        errors.append(f"Makefile: MUTATION_MIN ниже {MIN_MUTATION_SCORE}")
     return errors
 
 
