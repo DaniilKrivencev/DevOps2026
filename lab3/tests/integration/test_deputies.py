@@ -113,3 +113,22 @@ async def test_delete_deputy_with_membership_and_attendance(client, make_deputy,
     members = await client.get(f"/api/v1/commissions/{session['commission_id']}/members")
     assert members.json() == []
     assert (await client.get("/api/v1/attendance/")).json() == []
+
+
+async def test_filter_deputies_by_active_and_party(client, make_deputy):
+    """Ф1.3: список депутатов с фильтрацией по статусу активности и партии."""
+    a = await make_deputy(party="Партия А")
+    b = await make_deputy(party="Партия Б")
+    c = await make_deputy(party="Партия А", is_active=False)
+    active = (await client.get(API, params={"is_active": True})).json()
+    assert [d["id"] for d in active] == [a["id"], b["id"]]
+    party = (await client.get(API, params={"party": "Партия А"})).json()
+    assert [d["id"] for d in party] == [a["id"], c["id"]]
+    both = (await client.get(API, params={"party": "Партия А", "is_active": False})).json()
+    assert [d["id"] for d in both] == [c["id"]]
+    assert (await client.get(API, params={"party": "Нет такой"})).json() == []
+
+
+async def test_filter_deputies_invalid_is_active(client):
+    r = await client.get(API, params={"is_active": "может быть"})
+    assert r.status_code == 422

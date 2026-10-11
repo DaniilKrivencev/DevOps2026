@@ -23,8 +23,18 @@ async def _commit_or_conflict(db: AsyncSession) -> None:
 
 
 @router.get("/", response_model=list[DeputyOut])
-async def list_deputies(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Deputy).order_by(Deputy.id))
+async def list_deputies(
+    is_active: bool | None = None,
+    party: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Список депутатов с фильтрацией по статусу активности и партии (Ф1.3)."""
+    stmt = select(Deputy).order_by(Deputy.id)
+    if is_active is not None:
+        stmt = stmt.where(Deputy.is_active == is_active)
+    if party is not None:
+        stmt = stmt.where(Deputy.party == party)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 
