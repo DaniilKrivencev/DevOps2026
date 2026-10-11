@@ -1,3 +1,7 @@
+# Конфигурация инструментов качества ЛР3.
+# ВНИМАНИЕ: пороги и исключения ниже — критический файл приёмки.
+# Снижать пороги / добавлять исключения можно только с обоснованием (см. CONTRIBUTING.md).
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -16,6 +20,7 @@ branch = true
 concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
+# Порог покрытия. Снижение запрещено (scripts/check_policy.py).
 fail_under = 85
 show_missing = true
 

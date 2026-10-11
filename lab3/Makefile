@@ -3,7 +3,7 @@
 # Единый локальный проверочный контур: make verify
 # =============================================================================
 
-.PHONY: help setup install run lint format sast test test-unit test-integration test-pg \
+.PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
         migrate migrate-down migrate-status migrate-new migrate-check \
         seed backup restore restore-demo verify clean
 
@@ -46,6 +46,10 @@ sast: ## Статический анализ безопасности (bandit), 
 	@mkdir -p $(REPORTS)
 	$(PY) -m bandit -c pyproject.toml -r app scripts -f json -o $(REPORTS)/bandit.json -q || true
 	$(PY) -m bandit -c pyproject.toml -r app scripts
+
+policy: ## Запрет пропуска тестов, снижения порогов и исключений без обоснования
+	@echo "$(GREEN)▶ Проверка правил проекта$(RESET)"
+	$(PY) scripts/check_policy.py
 
 # ─── Тесты ───────────────────────────────────────────────────────────────────
 test: ## Все тесты + отчёты (JUnit, покрытие HTML/XML) с порогом покрытия
@@ -100,8 +104,9 @@ restore-demo: ## Демонстрация: бэкап → удаление/по�
 	PY=$(PY) ./scripts/restore_demo.sh
 
 # ─── Единая проверка ─────────────────────────────────────────────────────────
-verify: ## Обязательный набор проверок: lint, sast, migrate-check, тесты с порогом покрытия
+verify: ## ВЕСЬ обязательный набор проверок: policy, lint, sast, migrate-check, test
 	@echo "$(GREEN)══════ make verify ══════$(RESET)"
+	@$(MAKE) --no-print-directory policy
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory sast
 	@$(MAKE) --no-print-directory migrate-check
