@@ -2,10 +2,22 @@
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# --strict-markers: опечатка в маркере — ошибка, а не тихий пропуск
+addopts = "--strict-markers -ra"
 markers = [
     "unit: чистая логика без БД",
     "integration: тесты с реальной БД (SQLite/PostgreSQL) и миграциями",
 ]
+
+[tool.coverage.run]
+source = ["app", "scripts"]
+branch = true
+# SQLAlchemy async работает через greenlet — без этого coverage не видит строки после await
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
 
 [tool.ruff]
 line-length = 100
