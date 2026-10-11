@@ -62,7 +62,9 @@ class Deputy(Base):
     # ЛР3, миграция 0002: контактные данные
     email: Mapped[str | None] = mapped_column(String(254), unique=True)
     phone: Mapped[str | None] = mapped_column(String(20))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Reverse relations
     chaired_commissions: Mapped[list[Commission]] = relationship(
@@ -96,7 +98,9 @@ class Commission(Base):
     chair_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("deputies.id", ondelete="SET NULL")
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     chair: Mapped[Deputy | None] = relationship(
         "Deputy", back_populates="chaired_commissions", foreign_keys=[chair_id]
@@ -150,7 +154,9 @@ class Session(Base):
         Enum(SessionStatus), default=SessionStatus.planned, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     commission: Mapped[Commission] = relationship("Commission", back_populates="sessions")
     attendances: Mapped[list[Attendance]] = relationship(
