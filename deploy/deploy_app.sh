@@ -90,8 +90,18 @@ sudo ufw --force enable
 sudo ufw status verbose
 
 echo "=== 9. Проверка статуса службы ==="
-sleep 2
 sudo systemctl status "$SERVICE_NAME" --no-pager
-curl -s http://127.0.0.1:8000/health
+# Ждём готовности приложения (до 30 с) вместо фиксированного sleep
+for i in $(seq 1 15); do
+  if curl -sf http://127.0.0.1:8000/health; then
+    echo -e "\n/health отвечает (попытка $i)"
+    break
+  fi
+  if [ "$i" -eq 15 ]; then
+    echo "ОШИБКА: приложение не ответило на /health за 30 секунд" >&2
+    exit 1
+  fi
+  sleep 2
+done
 
 echo -e "\n=== Сервер приложения успешно развернут! ==="
