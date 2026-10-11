@@ -4,7 +4,8 @@
 # =============================================================================
 
 .PHONY: help setup install run lint format test migrate migrate-down migrate-status \
-        migrate-new migrate-check backup restore verify clean
+        migrate-new migrate-check \
+        seed backup restore restore-demo verify clean
 
 VENV    := .venv
 PY      := $(shell [ -x $(VENV)/bin/python ] && echo $(VENV)/bin/python || echo python3)
@@ -65,6 +66,9 @@ migrate-check: ## Чистая БД с нуля + проверка, что мо�
 	APP_ENV=development DATABASE_URL=sqlite+aiosqlite:///./$(REPORTS)/migrate_check.db \
 	  sh -c '$(PY) -m alembic upgrade head && $(PY) -m alembic check'
 
+seed: ## Наполнить БД демонстрационными данными
+	$(PY) -m scripts.seed
+
 # ─── Резервное копирование ───────────────────────────────────────────────────
 backup: ## Резервная копия БД в backups/ (pg_dump или копия SQLite)
 	$(PY) -m scripts.db_backup backup
@@ -73,6 +77,9 @@ restore: ## Восстановление: make restore BACKUP=backups/dump_xxx.s
 	@if [ -z "$(BACKUP)" ]; then \
 	  echo "$(RED)✗ Укажите файл: make restore BACKUP=backups/dump_xxx.sql$(RESET)"; exit 1; fi
 	$(PY) -m scripts.db_backup restore $(BACKUP)
+
+restore-demo: ## Демонстрация: бэкап → удаление/порча данных → восстановление
+	PY=$(PY) ./scripts/restore_demo.sh
 
 # ─── Единая проверка ─────────────────────────────────────────────────────────
 verify: ## Обязательный набор проверок
