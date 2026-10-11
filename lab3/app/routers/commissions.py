@@ -2,10 +2,12 @@
 
 Business rule enforced here:
   - The chairperson of a commission must be a member of that commission.
+    A new commission has no members yet, so it is created without a chair.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -17,6 +19,7 @@ from app.schemas import (
     CommissionOut,
     CommissionUpdate,
 )
+from app.services import chair_allowed
 
 router = APIRouter(prefix="/commissions", tags=["commissions"])
 
@@ -36,9 +39,18 @@ async def create_commission(data: CommissionCreate, db: AsyncSession = Depends(g
         chair = await db.get(Deputy, data.chair_id)
         if not chair:
             raise HTTPException(status_code=404, detail="Chair deputy not found")
+        # Ф2.4: у новой комиссии ещё нет членов, значит председатель не может быть членом
+        raise HTTPException(
+            status_code=422,
+            detail="Business rule violation: chair must be a member of the commission",
+        )
     commission = Commission(**data.model_dump())
     db.add(commission)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Commission name must be unique") from exc
     await db.refresh(commission)
     return commission
 
@@ -67,13 +79,11 @@ async def update_commission(
         chair = await db.get(Deputy, new_chair_id)
         if not chair:
             raise HTTPException(status_code=404, detail="Chair deputy not found")
-        # Check membership
-        stmt = select(CommissionMember).where(
-            CommissionMember.commission_id == commission_id,
-            CommissionMember.deputy_id == new_chair_id,
+        stmt = select(CommissionMember.deputy_id).where(
+            CommissionMember.commission_id == commission_id
         )
-        member = (await db.execute(stmt)).scalar_one_or_none()
-        if not member:
+        member_ids = (await db.execute(stmt)).scalars().all()
+        if not chair_allowed(new_chair_id, member_ids):
             raise HTTPException(
                 status_code=422,
                 detail="Business rule violation: chair must be a member of the commission",
@@ -81,7 +91,11 @@ async def update_commission(
 
     for field, value in update_data.items():
         setattr(commission, field, value)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Commission name must be unique") from exc
     await db.refresh(commission)
     return commission
 
