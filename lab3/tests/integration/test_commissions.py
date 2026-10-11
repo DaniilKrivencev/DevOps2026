@@ -12,6 +12,7 @@ async def test_create_commission(client):
     assert r.status_code == 201
     assert r.json()["name"] == "Комиссия по бюджету"
     assert r.json()["chair_id"] is None
+    assert r.json()["is_active"] is True
 
 
 async def test_commission_name_unique(client, make_commission):
@@ -61,6 +62,13 @@ async def test_rename_to_existing_name_conflict(client, make_commission):
     second = await make_commission(name="Вторая")
     r = await client.patch(f"{API}{second['id']}", json={"name": "Первая"})
     assert r.status_code == 409
+
+
+async def test_deactivate_commission(client, make_commission):
+    commission = await make_commission()
+    r = await client.patch(f"{API}{commission['id']}", json={"is_active": False})
+    assert r.status_code == 200
+    assert r.json()["is_active"] is False
 
 
 async def test_member_duplicate(client, make_deputy, make_commission):
