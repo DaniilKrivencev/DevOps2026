@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 
-from app.database import engine
+from app import database
 from app.routers import attendance, commissions, deputies, sessions
 
 APP_VERSION = "0.1.0"

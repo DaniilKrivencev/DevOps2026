@@ -16,6 +16,7 @@ engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 def get_engine():
     return engine
 
+
 AsyncSessionLocal = sessionmaker(
     bind=engine,
     class_=AsyncSession,

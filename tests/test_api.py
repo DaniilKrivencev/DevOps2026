@@ -39,17 +39,26 @@ async def db_engine():
     await engine.dispose()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def client(db_engine):
     from app import database
     from app.database import get_db
     from app.main import app
 
-    TestSessionLocal = sessionmaker(bind=db_engine, class_=AsyncSession, expire_on_commit=False)
+    TestSessionLocal = sessionmaker(
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
     async def override_get_db():
         async with TestSessionLocal() as session:
-            yield session
+            try:
+                yield session
+            finally:
+                await session.close()
 
     def override_get_engine():
         return db_engine
