@@ -214,9 +214,9 @@ jobs:
             -e DATABASE_URL="sqlite+aiosqlite:///./test.db" \
             -e SECRET_KEY="ci-test-secret" \
             cityduma:${{ github.sha }}
-          sleep 5
+          sleep 3
           docker ps
-          curl -f http://localhost:8000/health || (docker logs test-app && exit 1)
+          curl --retry 5 --retry-connrefused --retry-delay 2 -f http://localhost:8000/health || (docker logs test-app && exit 1)
           docker stop test-app && docker rm test-app
 
       - name: Run Trivy Vulnerability Scanner on Image
