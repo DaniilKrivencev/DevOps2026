@@ -1,0 +1,13 @@
+* @DaniilKrivencev
+
+# Критические файлы приёмки (требуют обязательного согласования)
+/Makefile @DaniilKrivencev
+/pyproject.toml @DaniilKrivencev
+/Dockerfile @DaniilKrivencev
+/docker-compose.yml @DaniilKrivencev
+/.github/ @DaniilKrivencev
+/.github/workflows/ @DaniilKrivencev
+/tests/ @DaniilKrivencev
+/alembic/versions/ @DaniilKrivencev
+/requirements.txt @DaniilKrivencev
+/CONTRIBUTING.md @DaniilKrivencev

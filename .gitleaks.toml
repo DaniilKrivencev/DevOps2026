@@ -1,0 +1,13 @@
+title = "gitleaks config for City Duma project"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+    '''(?i)^\.env\.example$''',
+    '''(?i)^Vagrantfile$''',
+    '''(?i)^deploy/''',
+    '''(?i)^docs/''',
+]
