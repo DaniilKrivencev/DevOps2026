@@ -53,7 +53,7 @@ sudo chown -R duma-app:duma-app "$APP_DIR"
 sudo chmod -R 755 "$APP_DIR"
 
 echo "=== 6. Применение миграций Alembic ==="
-sudo env -C "$APP_DIR" --file="$CONF_DIR/cityduma.env" "$APP_DIR/venv/bin/alembic" upgrade head
+sudo bash -c "set -a; . '$CONF_DIR/cityduma.env'; set +a; cd '$APP_DIR' && '$APP_DIR/venv/bin/alembic' upgrade head"
 
 echo "=== 7. Настройка systemd-службы ==="
 sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null << EOF

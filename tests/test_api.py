@@ -83,7 +83,7 @@ async def test_create_deputy(client):
     r = await client.post("/api/v1/deputies/", json=payload)
     assert r.status_code == 201
     data = r.json()
-    assert data["full_name"] == "Иванов Иван Иванович"
+    assert data["full_name"] == "222 3333 3333"
     assert data["id"] > 0
 
 

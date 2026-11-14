@@ -6,7 +6,7 @@
 # =============================================================================
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "ubuntu/noble64" # Ubuntu 24.04 LTS (без GUI)
+  config.vm.box = "bento/ubuntu-24.04" # Ubuntu 24.04 LTS (без GUI)
 
   # ─── 1. Сервер Базы Данных (db-server) ──────────────────────────────────────
   config.vm.define "db" do |db|
