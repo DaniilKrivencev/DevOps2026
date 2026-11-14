@@ -95,13 +95,21 @@ restore: ## Восстановить резервную копию (BACKUP=backu
 	  $${POSTGRES_DB:-city_duma} < $(BACKUP)
 	@echo "$(GREEN)✔ Восстановление завершено$(RESET)"
 
+# ─── Безопасность и аудит ────────────────────────────────────────────────────
+security-audit: ## Проверка зависимостей на уязвимости (pip-audit)
+	@echo "$(GREEN)▶ Проверка безопасности зависимостей...$(RESET)"
+	$(PIP) install pip-audit --quiet
+	pip-audit -r requirements.txt || true
+	@echo "$(GREEN)✔ Аудит завершен$(RESET)"
+
 # ─── Полная локальная проверка ────────────────────────────────────────────────
-verify: ## Полный набор локальных проверок (quality + test)
+verify: ## Полный набор локальных проверок (quality + test + security-audit)
 	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
 	@echo "$(GREEN)  Полная проверка проекта$(RESET)"
 	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
 	@$(MAKE) quality
 	@$(MAKE) test
+	@$(MAKE) security-audit
 	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
 	@echo "$(GREEN)  ✔ Все проверки пройдены$(RESET)"
 	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"

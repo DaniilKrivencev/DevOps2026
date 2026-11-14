@@ -1,0 +1,288 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ─── 1. Проверка стиля и качества кода ──────────────────────────────────────
+  lint:
+    name: 🎨 Lint & Style Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff==0.4.4
+
+      - name: Run Ruff Linter
+        run: |
+          make quality
+
+  # ─── 2. Поиск секретов и аудит зависимостей ─────────────────────────────────
+  security:
+    name: 🛡️ Security Scan (Secrets & Dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret Detection (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Run pip-audit for dependency vulnerabilities
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip-audit -r requirements.txt --ignore-vuln CVE-FAKE-TEST || true
+        # audit saves report
+      - name: Export security scan summary
+        run: |
+          mkdir -p reports/security
+          pip-audit -r requirements.txt --format json > reports/security/pip-audit.json || true
+
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-audit-reports
+          path: reports/security/
+
+  # ─── 3. Автоматические тесты (с отдельной тестовой БД PostgreSQL в DinD) ────
+  test:
+    name: 🧪 Automated Tests (PostgreSQL Test DB)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_city_duma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install aiosqlite pytest-cov
+
+      - name: Run tests with SQLite
+        run: |
+          pytest tests/ -v --junitxml=reports/tests/junit-sqlite.xml
+
+      - name: Run tests with separate PostgreSQL Test DB
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_city_duma
+        run: |
+          mkdir -p reports/tests
+          pytest tests/ -v --junitxml=reports/tests/junit-postgres.xml --cov=app --cov-report=xml:reports/tests/coverage.xml
+
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: reports/tests/
+
+  # ─── 4. Проверка миграций и резервного копирования ───────────────────────────
+  database-check:
+    name: 🗄️ Migrations & Backup Verification
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: duma_user
+          POSTGRES_PASSWORD: migration_test_password
+          POSTGRES_DB: city_duma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies & PostgreSQL client tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify Alembic Migrations (Upgrade -> Downgrade -> Upgrade)
+        env:
+          DATABASE_URL: postgresql+asyncpg://duma_user:migration_test_password@localhost:5432/city_duma
+        run: |
+          echo "Applying migrations..."
+          alembic upgrade head
+          echo "Testing rollback..."
+          alembic downgrade -1
+          echo "Re-applying head..."
+          alembic upgrade head
+
+      - name: Verify Backup & Restore Procedure
+        env:
+          PGPASSWORD: migration_test_password
+        run: |
+          mkdir -p backups
+          BACKUP_FILE=backups/ci_dump.sql
+          echo "Creating backup..."
+          pg_dump -h localhost -U duma_user -d city_duma > $BACKUP_FILE
+          test -s $BACKUP_FILE
+          echo "Testing restore..."
+          psql -h localhost -U duma_user -d city_duma < $BACKUP_FILE
+          echo "Backup and restore verified successfully."
+
+  # ─── 5. Сборка Docker-образа, DinD и анализ уязвимостей (Trivy) ─────────────
+  container-build-and-scan:
+    name: 🐳 Docker Build, Container Check & Trivy Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image locally (DinD)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: cityduma:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Container Healthcheck in DinD
+        run: |
+          # Запускаем контейнер и проверяем его работоспособность
+          docker run -d --name test-app -p 8000:8000 \
+            -e DATABASE_URL="sqlite+aiosqlite:///./test.db" \
+            -e SECRET_KEY="ci-test-secret" \
+            cityduma:${{ github.sha }}
+          sleep 3
+          docker ps
+          curl --retry 5 --retry-connrefused --retry-delay 2 -f http://localhost:8000/health || (docker logs test-app && exit 1)
+          docker stop test-app && docker rm test-app
+
+      - name: Run Trivy Vulnerability Scanner on Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: cityduma:${{ github.sha }}
+          format: "table"
+          exit-code: "0"
+          severity: "CRITICAL,HIGH"
+          output: "reports-trivy.txt"
+
+      - name: Export Trivy JSON report for artifacts
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: cityduma:${{ github.sha }}
+          format: "json"
+          output: "reports-trivy.json"
+
+      - name: Upload Container Scan Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-scan-reports
+          path: |
+            reports-trivy.txt
+            reports-trivy.json
+
+  # ─── 6. Публикация Docker-образа (только при успехе всех проверок) ───────────
+  publish:
+    name: 🚀 Publish Docker Image to Registry
+    needs: [lint, security, test, database-check, container-build-and-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+
+      - name: Build and Push Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

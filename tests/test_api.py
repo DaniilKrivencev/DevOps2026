@@ -7,15 +7,15 @@ Run: make test
 """
 
 import os
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 # Use SQLite for tests (no PostgreSQL required in CI by default)
-TEST_DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL", "sqlite+aiosqlite:///./test.db"
-)
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -27,10 +27,11 @@ def anyio_backend():
 
 @pytest.fixture(scope="session")
 async def db_engine():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
     # Create tables
-    from app.database import Base
     import app.models  # noqa: F401 — register models
+    from app.database import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
@@ -39,26 +40,38 @@ async def db_engine():
     await engine.dispose()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def client(db_engine):
-    from app.main import app
+    from app import database
     from app.database import get_db
+    from app.main import app
 
     TestSessionLocal = sessionmaker(
-        bind=db_engine, class_=AsyncSession, expire_on_commit=False
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
     )
 
     async def override_get_db():
         async with TestSessionLocal() as session:
-            yield session
+            try:
+                yield session
+            finally:
+                await session.close()
+
+    def override_get_engine():
+        return db_engine
 
     app.dependency_overrides[get_db] = override_get_db
+    orig_get_engine = database.get_engine
+    database.get_engine = override_get_engine
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
+    database.get_engine = orig_get_engine
     app.dependency_overrides.clear()
 
 
@@ -174,7 +187,11 @@ async def test_commission_chair_as_member(client):
 async def test_create_session(client):
     comm_r = await client.post("/api/v1/commissions/", json={"name": "Комиссия по спорту"})
     comm_id = comm_r.json()["id"]
-    payload = {"commission_id": comm_id, "held_on": "2026-10-01", "topic": "Финансирование стадиона"}
+    payload = {
+        "commission_id": comm_id,
+        "held_on": "2026-10-01",
+        "topic": "Финансирование стадиона",
+    }
     r = await client.post("/api/v1/sessions/", json=payload)
     assert r.status_code == 201
     assert r.json()["status"] == "planned"
@@ -185,9 +202,10 @@ async def test_session_quorum_check(client):
     """Marking session as 'held' without quorum must fail."""
     comm_r = await client.post("/api/v1/commissions/", json={"name": "Малая комиссия"})
     comm_id = comm_r.json()["id"]
-    sess_r = await client.post("/api/v1/sessions/", json={
-        "commission_id": comm_id, "held_on": "2026-11-01", "topic": "Тест кворума"
-    })
+    sess_r = await client.post(
+        "/api/v1/sessions/",
+        json={"commission_id": comm_id, "held_on": "2026-11-01", "topic": "Тест кворума"},
+    )
     sess_id = sess_r.json()["id"]
     # Try to mark as held with 0 members → quorum fails
     r = await client.patch(f"/api/v1/sessions/{sess_id}", json={"status": "held"})
@@ -203,9 +221,10 @@ async def test_create_attendance(client):
     dep_id = dep_r.json()["id"]
     comm_r = await client.post("/api/v1/commissions/", json={"name": "Комиссия по образованию"})
     comm_id = comm_r.json()["id"]
-    sess_r = await client.post("/api/v1/sessions/", json={
-        "commission_id": comm_id, "held_on": "2026-09-15", "topic": "Школьная реформа"
-    })
+    sess_r = await client.post(
+        "/api/v1/sessions/",
+        json={"commission_id": comm_id, "held_on": "2026-09-15", "topic": "Школьная реформа"},
+    )
     sess_id = sess_r.json()["id"]
     payload = {"session_id": sess_id, "deputy_id": dep_id, "status": "present"}
     r = await client.post("/api/v1/attendance/", json=payload)
@@ -219,9 +238,10 @@ async def test_attendance_duplicate(client):
     dep_id = dep_r.json()["id"]
     comm_r = await client.post("/api/v1/commissions/", json={"name": "Ещё одна комиссия"})
     comm_id = comm_r.json()["id"]
-    sess_r = await client.post("/api/v1/sessions/", json={
-        "commission_id": comm_id, "held_on": "2026-09-20", "topic": "Дубль тест"
-    })
+    sess_r = await client.post(
+        "/api/v1/sessions/",
+        json={"commission_id": comm_id, "held_on": "2026-09-20", "topic": "Дубль тест"},
+    )
     sess_id = sess_r.json()["id"]
     payload = {"session_id": sess_id, "deputy_id": dep_id, "status": "present"}
     await client.post("/api/v1/attendance/", json=payload)

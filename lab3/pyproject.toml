@@ -1,0 +1,49 @@
+# Конфигурация инструментов качества ЛР3.
+# ВНИМАНИЕ: пороги и исключения ниже — критический файл приёмки.
+# Снижать пороги / добавлять исключения можно только с обоснованием (см. CONTRIBUTING.md).
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+# --strict-markers: опечатка в маркере — ошибка, а не тихий пропуск
+addopts = "--strict-markers -ra"
+markers = [
+    "unit: чистая логика без БД",
+    "integration: тесты с реальной БД (SQLite/PostgreSQL) и миграциями",
+]
+
+[tool.coverage.run]
+source = ["app", "scripts"]
+branch = true
+# SQLAlchemy async работает через greenlet — без этого coverage не видит строки после await
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+# Порог покрытия. Снижение запрещено (scripts/check_policy.py).
+fail_under = 85
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "S"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Обоснование: в тестах assert — основной механизм проверки (S101),
+# а conftest выставляет APP_ENV=test до импорта приложения (E402).
+"tests/**" = ["S101"]
+"tests/conftest.py" = ["S101", "E402"]
+# Обоснование: FastAPI использует вызов Depends() в значениях по умолчанию (B008).
+"app/routers/*.py" = ["B008"]
+"app/main.py" = ["B008"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+
+[tool.mutmut]
+paths_to_mutate = "app/services.py"
+tests_dir = "tests/unit"

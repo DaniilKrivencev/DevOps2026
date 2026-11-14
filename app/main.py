@@ -4,12 +4,11 @@ import os
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 
-from app.database import get_db, engine
-from app.routers import deputies, commissions, sessions, attendance
+from app import database
+from app.routers import attendance, commissions, deputies, sessions
 
 APP_VERSION = "0.1.0"
 
@@ -35,7 +34,8 @@ async def health():
     """Service health check — проверяет соединение с БД."""
     db_status = "ok"
     try:
-        async with engine.connect() as conn:
+        current_engine = database.get_engine()
+        async with current_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
     except Exception as exc:
         db_status = f"error: {exc}"

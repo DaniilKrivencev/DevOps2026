@@ -1,0 +1,10 @@
+# Зафиксированные (pinned) версии рабочих зависимостей. Python 3.12+.
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+aiosqlite==0.20.0
+alembic==1.14.0
+jinja2==3.1.4
+python-dotenv==1.0.1
+pydantic==2.10.3

@@ -1,7 +1,5 @@
 """Deputies router — CRUD for Deputy entity."""
 
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +11,7 @@ from app.schemas import DeputyCreate, DeputyOut, DeputyUpdate
 router = APIRouter(prefix="/deputies", tags=["deputies"])
 
 
-@router.get("/", response_model=List[DeputyOut])
+@router.get("/", response_model=list[DeputyOut])
 async def list_deputies(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Deputy).order_by(Deputy.id))
     return result.scalars().all()
@@ -37,9 +35,7 @@ async def get_deputy(deputy_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{deputy_id}", response_model=DeputyOut)
-async def update_deputy(
-    deputy_id: int, data: DeputyUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_deputy(deputy_id: int, data: DeputyUpdate, db: AsyncSession = Depends(get_db)):
     deputy = await db.get(Deputy, deputy_id)
     if not deputy:
         raise HTTPException(status_code=404, detail="Deputy not found")

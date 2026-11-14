@@ -1,15 +1,21 @@
 """Application database connection and session management."""
 
 import os
+
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL: str = os.environ["DATABASE_URL"]
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./city_duma_default.db")
 
 engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+
+
+def get_engine():
+    return engine
+
 
 AsyncSessionLocal = sessionmaker(
     bind=engine,

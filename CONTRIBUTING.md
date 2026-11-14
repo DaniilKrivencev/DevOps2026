@@ -79,18 +79,33 @@ test(commissions): add membership business rule tests
 
 ---
 
-## 6. Критические файлы приёмки
+## 6. Критические файлы приёмки и защита через CODEOWNERS
 
-Изменения в следующих файлах требуют **отдельной проверки** в PR:
+Изменения в критических файлах требуют **обязательного согласования владельцами кода (Code Review)** через `.github/CODEOWNERS`:
 
-| Файл | Причина |
-|------|---------|
-| `Makefile` | Изменение обязательных команд проверки |
-| `docker-compose.yml` | Изменение инфраструктуры |
-| `alembic/versions/*.py` | Изменение схемы БД |
-| `pyproject.toml` | Изменение настроек качества кода |
-| `.gitignore` | Риск утечки секретов |
-| `CONTRIBUTING.md` | Этот документ |
+| Файл / Каталог | Причина защиты | Владелец |
+|---|---|---|
+| `Makefile` | Изменение обязательных команд локальной и CI проверки | `@DaniilKrivencev` |
+| `pyproject.toml` | Настройки линтера Ruff и тестов Pytest | `@DaniilKrivencev` |
+| `Dockerfile`, `docker-compose.yml` | Изменение контейнерного окружения и базовых образов | `@DaniilKrivencev` |
+| `.github/workflows/` | Пайплайн CI/CD (защита от ослабления или отключения проверок) | `@DaniilKrivencev` |
+| `tests/**` | Тестовый набор (защита от удаления тестов) | `@DaniilKrivencev` |
+| `alembic/versions/**` | Изменение структуры базы данных | `@DaniilKrivencev` |
+| `requirements.txt` | Список зависимостей проекта (защита от уязвимых пакетов) | `@DaniilKrivencev` |
+| `.gitignore` | Риск случайного коммита секретов | `@DaniilKrivencev` |
+| `CONTRIBUTING.md` | Регламент разработки | `@DaniilKrivencev` |
+
+---
+
+## 6.1 Барьеры CI/CD Pipeline
+
+Перед слиянием в `main` каждый PR обязан пройти автоматический CI-пайплайн (`.github/workflows/ci.yml`):
+1. **Lint**: соответствие стандарту кода (Ruff).
+2. **Security Scan**: поиск секретов (Gitleaks) и уязвимостей в пакетах (pip-audit).
+3. **Automated Tests**: прогон тестов с отдельным экземпляром PostgreSQL в DinD.
+4. **Database Check**: полный цикл миграций Alembic (upgrade -> downgrade -> upgrade) и проверка резервного копирования/восстановления.
+5. **Container Scan**: сборка Docker-образа и проверка уязвимостей (Trivy).
+6. **Publish**: публикация образа разрешена **только при успешном прохождении всех шагов** и только для доверенной ветки `main` / тегов версий.
 
 ---
 

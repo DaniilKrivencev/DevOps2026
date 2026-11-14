@@ -1,7 +1,5 @@
 """Attendance router — CRUD for Attendance entity."""
 
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +11,7 @@ from app.schemas import AttendanceCreate, AttendanceOut, AttendanceUpdate
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
 
-@router.get("/", response_model=List[AttendanceOut])
+@router.get("/", response_model=list[AttendanceOut])
 async def list_attendance(
     session_id: int | None = None,
     deputy_id: int | None = None,
@@ -29,9 +27,7 @@ async def list_attendance(
 
 
 @router.post("/", response_model=AttendanceOut, status_code=status.HTTP_201_CREATED)
-async def create_attendance(
-    data: AttendanceCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_attendance(data: AttendanceCreate, db: AsyncSession = Depends(get_db)):
     session = await db.get(Session, data.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
