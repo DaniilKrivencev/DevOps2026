@@ -2,6 +2,18 @@
 
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [SemVer](https://semver.org/lang/ru/).
 
+## [0.7.0] — ЛР7: управление конфигурацией и воспроизводимая инфраструктура
+
+### Добавлено
+- `infra/ansible`: роли base, users, ssh, firewall, docker, app, verify; окружения staging,
+  production и ci; параметры общие / окружения / узловые / секретные (ansible-vault).
+- Управляющий узел Ansible в контейнере (`scripts/infra.sh`), команды `make infra-*`.
+- `make infra-test`: чистая машина → повторный запуск без изменений → ручные изменения →
+  восстановление; проверка доступности приложения после настройки.
+- Pipeline `.github/workflows/infra.yml`, требования к инфраструктурному коду
+  (`scripts/infra_policy.py`), CODEOWNERS для ролей, окружений и секретов.
+- Чистые ВМ `infra-stage` и `infra-prod` в Vagrantfile.
+
 ## [0.6.2] — инструкции по лабораторным
 
 ### Добавлено
