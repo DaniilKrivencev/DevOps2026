@@ -9,7 +9,7 @@ from scripts import container_policy as cp
 pytestmark = pytest.mark.unit
 
 GOOD_DOCKERFILE = """
-ARG PYTHON_IMAGE=python:3.12.8-slim-bookworm
+ARG PYTHON_IMAGE=python:3.12.16-slim-trixie
 FROM ${PYTHON_IMAGE} AS builder
 RUN pip install x
 FROM ${PYTHON_IMAGE} AS runtime
@@ -31,7 +31,7 @@ def good_service(**extra):
 @pytest.mark.parametrize(
     ("image", "error"),
     [
-        ("postgres:16.6-alpine", None),
+        ("postgres:16.16-alpine", None),
         ("ghcr.io/org/app:sha-1a2b3c", None),
         ("localhost:5000/app:1.0", None),
         ("app@sha256:abcd", None),
@@ -57,8 +57,8 @@ def test_good_dockerfile():
 @pytest.mark.parametrize(
     ("replace", "by", "error"),
     [
-        ("python:3.12.8-slim-bookworm", "python:latest", "тег latest"),
-        ("python:3.12.8-slim-bookworm", "python", "образ без тега"),
+        ("python:3.12.16-slim-trixie", "python:latest", "тег latest"),
+        ("python:3.12.16-slim-trixie", "python", "образ без тега"),
         ("USER 10001:10001", "USER root", "от root"),
         ("USER 10001:10001", "USER 0", "от root"),
         ("USER 10001:10001", "", "от root"),
