@@ -5,7 +5,7 @@
 # =============================================================================
 
 .PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
-        mutation docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
+        mutation audit lock docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
         docker-backup docker-restore docker-restore-new-volume container-lint container-check \
         migrate migrate-down migrate-status migrate-new migrate-check \
         seed backup restore restore-demo verify clean
@@ -40,7 +40,7 @@ setup: ## Первоначальная настройка проекта (еди
 	./setup.sh
 
 install: ## Установить зафиксированные зависимости в .venv
-	$(PY) -m pip install -r requirements-dev.txt
+	$(PY) -m pip install -r requirements-dev.txt -c requirements.lock
 
 run: ## Запустить приложение на http://localhost:8000
 	$(PY) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -60,6 +60,18 @@ sast: ## Статический анализ безопасности (bandit), 
 	@mkdir -p $(REPORTS)
 	$(PY) -m bandit -c pyproject.toml -r app scripts -f json -o $(REPORTS)/bandit.json -q || true
 	$(PY) -m bandit -c pyproject.toml -r app scripts
+
+audit: ## Уязвимости рабочих зависимостей (pip-audit по requirements.lock), отчёт reports/pip-audit.json
+	@echo "$(GREEN)▶ pip-audit$(RESET)"
+	@mkdir -p $(REPORTS)
+	-$(PY) -m pip_audit -r requirements.lock --no-deps --disable-pip -f json -o $(REPORTS)/pip-audit.json
+	$(PY) -m pip_audit -r requirements.lock --no-deps --disable-pip
+
+lock: ## Пересобрать requirements.lock из requirements.txt в чистом venv
+	rm -rf .lockvenv && $(PY) -m venv .lockvenv
+	.lockvenv/bin/pip install -q -r requirements.txt
+	{ head -n 2 requirements.lock; .lockvenv/bin/pip freeze; } > requirements.lock.new
+	mv requirements.lock.new requirements.lock && rm -rf .lockvenv
 
 policy: ## Запрет пропуска тестов, снижения порогов и исключений без обоснования
 	@echo "$(GREEN)▶ Проверка правил проекта$(RESET)"
