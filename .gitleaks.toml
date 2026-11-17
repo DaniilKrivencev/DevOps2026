@@ -1,13 +1,17 @@
-title = "gitleaks config for City Duma project"
+# Конфигурация gitleaks (поиск секретов). Критический файл приёмки.
+title = "gitleaks config — Городская Дума"
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Global allowlist"
+description = "Обоснованные исключения"
 paths = [
-    '''(?i)^\.env\.example$''',
-    '''(?i)^Vagrantfile$''',
-    '''(?i)^deploy/''',
-    '''(?i)^docs/''',
+    # Обоснование: шаблоны с заглушками вида change_me, реальных значений нет.
+    '''(^|/)\.env\.example$''',
+    '''^deploy/.*\.template$''',
+    # Обоснование: в ранней истории репозитория по ошибке были закоммичены
+    # локальные ключи Vagrant (.vagrant/). Каталог удалён и добавлен в .gitignore,
+    # ВМ пересоздаются, ключи генерируются заново при `vagrant up` и нигде не используются.
+    '''^\.vagrant/''',
 ]

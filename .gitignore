@@ -1,13 +1,40 @@
+# ── Секреты и локальная конфигурация (никогда не коммитятся) ──
 .env
-.venv
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+deploy/secrets.env
+deploy/*.secret
+
+# ── Vagrant / VirtualBox: локальное состояние ВМ и приватные ключи ──
+.vagrant/
+*.log
+
+# ── Python ──
+.venv/
+venv/
 __pycache__/
-*.pyc
-*.db
-*.sqlite
-backups/
-reports/
-.coverage
+*.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
 .mutmut-cache
 html/
+
+# ── Локальные БД, отчёты, бэкапы ──
+*.db
+*.sqlite
+*.sqlite3
+backups/
+reports/
+
+# ── IDE / ОС ──
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
