@@ -1,0 +1,14 @@
+---
+- name: Перечитать nginx.conf
+  # Обоснование: nginx.conf подключён bind mount — compose сам контейнер не перезапускает;
+  # встроенного модуля docker compose нет. Выполняется только при изменении файлов.
+  ansible.builtin.command:
+    cmd: >-
+      docker compose -p {{ project_name }} --env-file {{ app_dir }}/.env
+      -f {{ app_dir }}/compose/docker-compose.yml restart nginx
+  become: true
+  become_user: "{{ deploy_user }}"
+  environment:
+    APP_TAG: "{{ app_release_tag }}"
+  when: not ansible_check_mode
+  changed_when: true

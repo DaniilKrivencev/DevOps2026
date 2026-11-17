@@ -1,0 +1,7 @@
+---
+- name: Перезапустить docker
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  # в режиме --check на чистой машине пакет ещё не установлен
+  ignore_errors: "{{ ansible_check_mode }}"
