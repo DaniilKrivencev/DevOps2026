@@ -40,8 +40,11 @@ if [ -z "${TARGET_IMAGE:-}" ]; then
   docker build -q -t "$TARGET_IMAGE" test >/dev/null
 fi
 docker rm -f "$NAME" >/dev/null 2>&1 || true
+# Docker внутри «сервера» хранит образы в /var/lib/docker и /var/lib/containerd:
+# это отдельные тома, а не overlay контейнера (overlay поверх overlay не умеет whiteout-файлы)
 docker run -d --name "$NAME" --hostname cityduma-ci --privileged --cgroupns=host \
-  -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v /var/lib/docker --tmpfs /run --tmpfs /run/lock \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v /var/lib/docker -v /var/lib/containerd \
+  --tmpfs /run --tmpfs /run/lock \
   -p "127.0.0.1:${PORT}:22" "$TARGET_IMAGE" >/dev/null
 rm -f "$WORK/ci-target.key" "$WORK/ci-target.key.pub"
 ssh-keygen -q -t ed25519 -N "" -C ansible-ci -f "$WORK/ci-target.key"
