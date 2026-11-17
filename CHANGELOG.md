@@ -2,6 +2,12 @@
 
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [SemVer](https://semver.org/lang/ru/).
 
+## [0.6.1] — порядок в репозитории
+
+### Изменено
+- Материалы каждой лабораторной — в своём каталоге `labs/lab1` … `labs/lab6`
+  (отчёт `README.md`, файлы проекта, команды проверки); навигация — `labs/README.md`.
+
 ## [0.6.0] — ЛР6: Continuous Delivery
 
 ### Добавлено
