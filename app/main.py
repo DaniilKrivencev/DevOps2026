@@ -16,7 +16,7 @@ from app.logging_setup import install as install_logging
 from app.logging_setup import logger, setup_logging
 from app.routers import agenda, attendance, commissions, deputies, sessions
 
-APP_VERSION = "0.6.1"
+APP_VERSION = "0.6.2"
 
 # Идентификатор экземпляра: при нескольких копиях за балансировщиком (ЛР4)
 # видно, какой экземпляр обработал запрос. В контейнере hostname = id контейнера.
