@@ -1,0 +1,84 @@
+---
+# Автоматическая проверка после настройки: доступность приложения, версия,
+# основной сценарий, отсутствие лишних открытых портов, firewall, права на секреты.
+- name: Версия, которая должна работать
+  ansible.builtin.slurp:
+    src: "{{ app_dir }}/state/current.tag"
+  register: verify_tag_file
+
+- name: Ожидаемый тег
+  ansible.builtin.set_fact:
+    verify_tag: "{{ verify_tag_file.content | b64decode | trim }}"
+
+- name: "/health: приложение отвечает и БД доступна"
+  ansible.builtin.uri:
+    url: "{{ verify_base_url }}/health"
+    return_content: true
+  register: verify_health
+  until: verify_health.status == 200 and verify_health.json.database == 'ok'
+  retries: "{{ verify_retries }}"
+  delay: 2
+
+- name: "/version: работает нужная версия"
+  ansible.builtin.uri:
+    url: "{{ verify_base_url }}/version"
+    return_content: true
+  register: verify_version
+  failed_when: >-
+    verify_version.status != 200 or not (
+      (verify_tag.startswith('sha-') and verify_version.json.commit.startswith(verify_tag[4:]))
+      or verify_version.json.version == verify_tag)
+
+- name: Основной пользовательский сценарий (scripts/smoke_test.py в контейнере)
+  # Обоснование: сценарий выполняется внутри контейнера приложения; только проверка,
+  # данные проверки удаляются. Учётные данные передаются через окружение, не в аргументах.
+  ansible.builtin.command:
+    cmd: >-
+      docker compose -p {{ project_name }} --env-file {{ app_dir }}/.env
+      -f {{ app_dir }}/compose/docker-compose.yml
+      exec -T -e SMOKE_USER -e SMOKE_PASSWORD app1 python -m scripts.smoke_test http://nginx:8080
+  become: true
+  become_user: "{{ deploy_user }}"
+  environment:
+    APP_TAG: "{{ verify_tag }}"
+    SMOKE_USER: "{{ app_admin_login }}"
+    SMOKE_PASSWORD: "{{ app_admin_password }}"
+  register: verify_smoke
+  changed_when: false
+
+- name: Открытые порты на внешних адресах
+  # Обоснование: встроенного модуля списка слушающих портов нет; только чтение.
+  ansible.builtin.command: ss -H -tln
+  register: verify_ss
+  changed_when: false
+
+- name: Нет лишних открытых портов
+  ansible.builtin.assert:
+    that: verify_open_ports | difference(verify_allowed_ports | map('int') | list) | length == 0
+    fail_msg: "Лишние открытые порты: {{ verify_open_ports | difference(verify_allowed_ports | map('int') | list) }}"
+    success_msg: "Открыты только {{ verify_open_ports }}"
+  vars:
+    verify_open_ports: >-
+      {{ verify_ss.stdout_lines | map('split') | map(attribute=3)
+         | reject('match', '^(127\.|\[::1\]|\[::ffff:127\.)') | map('regex_replace', '^.*:', '')
+         | map('int') | unique | sort }}
+
+- name: Firewall включён (INPUT DROP)
+  # Обоснование: модуля чтения правил iptables во встроенных модулях нет; только чтение.
+  ansible.builtin.command: iptables -S INPUT
+  register: verify_fw
+  changed_when: false
+  failed_when: verify_fw.stdout_lines[0] != '-P INPUT DROP'
+
+- name: Права на файл с секретами
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/.env"
+  register: verify_env_stat
+  failed_when: >-
+    verify_env_stat.stat.mode != '0640' or verify_env_stat.stat.pw_name != 'root'
+
+- name: Итог проверки
+  ansible.builtin.debug:
+    msg: >-
+      {{ env_name }}: работает {{ verify_tag }} ({{ verify_version.json.commit[:12] }}),
+      /health ok, основной сценарий пройден, порты {{ verify_allowed_ports | join(', ') }}
