@@ -1,0 +1,11 @@
+# {{ ansible_managed }} — окружение {{ env_name }}
+*filter
+:INPUT DROP [0:0]
+-F INPUT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p ipv6-icmp -j ACCEPT
+{% for svc in firewall_tcp_services if svc.source == '0.0.0.0/0' %}
+-A INPUT -p tcp -m tcp --dport {{ svc.port }} -m conntrack --ctstate NEW -m comment --comment cityduma-{{ svc.name }} -j ACCEPT
+{% endfor %}
+COMMIT

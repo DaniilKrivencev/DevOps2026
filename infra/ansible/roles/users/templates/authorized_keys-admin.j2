@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for key in admin_ssh_pubkeys %}
+{{ key }}
+{% endfor %}

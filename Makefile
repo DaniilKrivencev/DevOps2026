@@ -8,6 +8,7 @@
         mutation audit lock docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
         docker-backup docker-restore docker-restore-new-volume container-lint container-check ci \
         cd-deploy cd-rollback cd-status cd-verify cd-demo-images \
+        infra-lint infra-check infra-apply infra-verify infra-test infra-vault-edit infra-vault-view \
         migrate migrate-down migrate-status migrate-new migrate-check migrate-check-pg \
         seed backup restore restore-demo verify clean
 
@@ -240,3 +241,32 @@ cd-demo-images: ## Образы «неудачных выпусков» для �
 	docker build -f deploy/staging/demo/Dockerfile --target broken-scenario \
 	  --build-arg BASE=$(BASE) --build-arg DEMO_COMMIT=de0000000002 -t $(firstword $(subst :, ,$(BASE))):sha-de0000000002 .
 	@echo "✔ sha-de0000000001 (healthcheck), sha-de0000000002 (основной сценарий); опубликуйте: docker push <образ>:<тег>"
+
+# ─── Инфраструктура как код (ЛР7): Ansible в управляющем контейнере ─────────
+# ENV=staging | production | ci. Пароль vault: infra/ansible/.vault_pass или ANSIBLE_VAULT_PASSWORD.
+INFRA := ./scripts/infra.sh
+ENV   ?= staging
+INV    = -i inventories/$(ENV)/hosts.yml
+
+infra-lint: ## Ansible: yamllint, ansible-lint (production), синтаксис всех окружений, требования к коду
+	$(INFRA) sh -c 'yamllint -s . && ansible-lint && \
+	  for e in staging production ci; do ansible-playbook --syntax-check -i inventories/$$e/hosts.yml site.yml; done'
+	$(PY) -m scripts.infra_policy
+
+infra-check: ## Что изменится на окружении, без применения: make infra-check ENV=staging
+	$(INFRA) ansible-playbook $(INV) site.yml --check --diff
+
+infra-apply: ## Привести окружение к требуемому состоянию: make infra-apply ENV=staging|production
+	$(INFRA) ansible-playbook $(INV) site.yml
+
+infra-verify: ## Только проверка окружения (приложение, версия, сценарий, порты, права)
+	$(INFRA) ansible-playbook $(INV) verify.yml
+
+infra-test: ## Чистая машина → повторный запуск (changed=0) → ручные изменения → восстановление
+	./infra/ansible/test/clean_machine.sh
+
+infra-vault-edit: ## Изменить секреты окружения: make infra-vault-edit ENV=staging
+	$(INFRA) ansible-vault edit inventories/$(ENV)/group_vars/cityduma/vault.yml
+
+infra-vault-view: ## Показать секреты окружения (расшифровать на экран)
+	$(INFRA) ansible-vault view inventories/$(ENV)/group_vars/cityduma/vault.yml

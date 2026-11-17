@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# Окружение: {{ env_name }}. Ручные изменения будут отменены следующим запуском Ansible.
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+X11Forwarding no
+MaxAuthTries {{ ssh_max_auth_tries }}
+AllowUsers {{ ssh_allow_users | unique | join(' ') }}

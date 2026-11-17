@@ -1,0 +1,3 @@
+---
+ssh_max_auth_tries: 3
+ssh_allow_users: ["{{ admin_user }}", "{{ deploy_user }}", "{{ ansible_user }}"]

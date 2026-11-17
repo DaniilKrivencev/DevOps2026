@@ -1,0 +1,18 @@
+---
+# ── Параметры ОКРУЖЕНИЯ staging ──
+env_name: staging
+app_tag: "0.6.2"          # версия при первичной настройке; дальше версию выпускает CD (ЛР6)
+log_level: DEBUG
+log_format: json
+auto_rollback: 1
+# SSH открыт для любой сети (тестовое окружение)
+ssh_allowed_from: 0.0.0.0/0
+
+# секреты — из зашифрованного vault.yml этого окружения
+postgres_password: "{{ vault_postgres_password }}"
+app_admin_password: "{{ vault_app_admin_password }}"
+app_secretary_password: "{{ vault_app_secretary_password }}"
+registry_username: "{{ vault_registry_username }}"
+registry_password: "{{ vault_registry_password }}"
+admin_ssh_pubkeys: "{{ vault_admin_ssh_pubkeys }}"
+deploy_ssh_pubkey: "{{ vault_deploy_ssh_pubkey }}"

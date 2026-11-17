@@ -1,0 +1,5 @@
+---
+app_repo_root: "{{ playbook_dir }}/../.."
+app_services: [db, app1, app2, nginx]
+app_wait_timeout: 240
+app_registry_host: "{{ app_image.split('/')[0] }}"

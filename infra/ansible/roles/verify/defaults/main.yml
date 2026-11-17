@@ -1,0 +1,5 @@
+---
+verify_base_url: "http://127.0.0.1:{{ http_port }}"
+verify_retries: 30
+# порты, которые могут слушать внешние адреса узла
+verify_allowed_ports: ["{{ ssh_port | int }}", "{{ http_port | int }}"]

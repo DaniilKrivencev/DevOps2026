@@ -16,6 +16,8 @@ pytestmark = pytest.mark.unit
         ("alembic/versions/0005_x.py", True),
         ("scripts/check_policy.py", True),
         ("requirements.lock", True),
+        ("infra/ansible/roles/ssh/templates/sshd-cityduma.conf.j2", True),
+        ("infra/ansible/inventories/production/group_vars/cityduma/vault.yml", True),
         ("app/main.py", False),
         ("docs/README.md", False),
         ("scripts/seed.py", False),

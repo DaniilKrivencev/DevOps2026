@@ -115,4 +115,25 @@ Vagrant.configure("2") do |config|
               "bash /opt/cityduma-src/deploy/staging/setup_staging.sh",
       env: ADMIN_ENV.merge(cd_env)
   end
+
+  # ─── ЛР7: две ЧИСТЫЕ ВМ — окружения staging и production для Ansible ──────
+  # Никакого провижининга: всё настраивает infra/ansible (make infra-apply ENV=…).
+  # vagrant up infra-stage infra-prod
+  {
+    "infra-stage" => ["172.27.206.60", 2224, 8280],
+    "infra-prod"  => ["172.27.206.70", 2225, 8380],
+  }.each do |name, (ip, ssh_port, http_port)|
+    config.vm.define name, autostart: false do |m|
+      m.vm.hostname = name
+      m.vm.synced_folder ".", "/opt/cityduma-src", disabled: true
+      m.vm.network "private_network", ip: ip
+      m.vm.network "forwarded_port", guest: 22, host: ssh_port, id: "ssh"
+      m.vm.network "forwarded_port", guest: 8080, host: http_port, id: "nginx"
+      m.vm.provider "virtualbox" do |vb|
+        vb.name = "cityduma-#{name}"
+        vb.memory = 2048
+        vb.cpus = 2
+      end
+    end
+  end
 end

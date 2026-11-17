@@ -1,0 +1,9 @@
+{
+  "log-driver": "json-file",
+  "log-opts": {"max-size": "{{ docker_log_max_size }}", "max-file": "{{ docker_log_max_file }}"},
+{% if docker_storage_driver %}
+  "storage-driver": "{{ docker_storage_driver }}",
+{% endif %}
+  "live-restore": true,
+  "no-new-privileges": true
+}
