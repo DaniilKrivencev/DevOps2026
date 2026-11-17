@@ -1,0 +1,20 @@
+# Контекст сборки: только то, что нужно образу. Секреты и локальные файлы
+# в образ не попадают (ЛР4: запрет секретов в образе).
+*
+!app/
+!alembic/
+!alembic.ini
+!scripts/
+!requirements.txt
+!requirements.lock
+!requirements-dev.txt
+
+# даже внутри разрешённых каталогов
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.db
+**/*.sqlite

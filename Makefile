@@ -1,139 +1,218 @@
 # =============================================================================
-# Городская Дума — Makefile
-# Единый интерфейс для всех команд проекта
+# Городская Дума — единый интерфейс команд проекта
+#   make verify           — весь обязательный набор локальных проверок (ЛР3)
+#   make container-check  — проверка контейнерного окружения (ЛР4)
 # =============================================================================
 
-.PHONY: setup run test quality migrate backup restore verify up down \
-        container-check help
+.PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
+        mutation audit lock docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
+        docker-backup docker-restore docker-restore-new-volume container-lint container-check ci \
+        migrate migrate-down migrate-status migrate-new migrate-check migrate-check-pg \
+        seed backup restore restore-demo verify clean
 
-PYTHON  := python
-PIP     := pip
-ALEMBIC := alembic
-COMPOSE := docker compose
+VENV    := .venv
+PY      := $(shell [ -x $(VENV)/bin/python ] && echo $(VENV)/bin/python || echo python3)
+REPORTS := reports
+SRC     := app scripts tests alembic
 
-# Цвета
+# Версия и тег образа: версия приложения + короткий SHA коммита (не latest)
+GIT_SHA     := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo nogit)
+APP_VERSION := $(shell sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' app/main.py)
+APP_TAG     ?= $(APP_VERSION)-$(GIT_SHA)
+export GIT_SHA APP_VERSION APP_TAG
+COMPOSE     := docker compose
+BACKUP_DIR  := backups
+
+# Пороги. Снижать запрещено — проверяет scripts/check_policy.py
+MUTATION_MIN := 90
+
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
 RED    := \033[0;31m
 RESET  := \033[0m
 
-# ─── Справка ─────────────────────────────────────────────────────────────────
 help: ## Показать список команд
-	@echo ""
-	@echo "  Городская Дума — команды проекта"
-	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
-	@echo ""
+	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-# ─── Первоначальная настройка ────────────────────────────────────────────────
-setup: ## Первоначальная настройка (venv, зависимости, .env)
-	@echo "$(GREEN)▶ Создание виртуального окружения...$(RESET)"
-	$(PYTHON) -m venv .venv
-	@echo "$(GREEN)▶ Установка зависимостей...$(RESET)"
-	.venv/Scripts/pip install -r requirements.txt 2>/dev/null || \
-	  .venv/bin/pip install -r requirements.txt
-	@if [ ! -f .env ]; then \
-	  cp .env.example .env; \
-	  echo "$(YELLOW)⚠  Создан .env из .env.example — задайте свои значения!$(RESET)"; \
-	fi
-	@echo "$(GREEN)✔ Настройка завершена$(RESET)"
+# ─── Установка и запуск ──────────────────────────────────────────────────────
+setup: ## Первоначальная настройка проекта (единый сценарий setup.sh)
+	./setup.sh
 
-# ─── Локальный запуск ────────────────────────────────────────────────────────
-run: ## Локальный запуск приложения (требует PostgreSQL)
-	@echo "$(GREEN)▶ Запуск FastAPI на http://localhost:8000$(RESET)"
-	uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+install: ## Установить зафиксированные зависимости в .venv
+	$(PY) -m pip install -r requirements-dev.txt -c requirements.lock
 
-# ─── Тесты ───────────────────────────────────────────────────────────────────
-test: ## Запуск автоматических тестов
-	@echo "$(GREEN)▶ Установка тестовых зависимостей...$(RESET)"
-	$(PIP) install aiosqlite --quiet
-	@echo "$(GREEN)▶ Запуск pytest...$(RESET)"
-	pytest tests/ -v --tb=short
-	@echo "$(GREEN)✔ Тесты завершены$(RESET)"
+run: ## Запустить приложение на http://localhost:8000
+	$(PY) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # ─── Качество кода ───────────────────────────────────────────────────────────
-quality: ## Форматирование и статический анализ (ruff)
-	@echo "$(GREEN)▶ Проверка форматирования (ruff)...$(RESET)"
-	ruff check app/ tests/
-	ruff format --check app/ tests/
-	@echo "$(GREEN)✔ Качество кода OK$(RESET)"
+lint: ## Линтер и проверка форматирования (ruff)
+	@echo "$(GREEN)▶ ruff check + ruff format --check$(RESET)"
+	$(PY) -m ruff check $(SRC)
+	$(PY) -m ruff format --check $(SRC)
 
-quality-fix: ## Автоматически исправить ошибки форматирования
-	ruff check --fix app/ tests/
-	ruff format app/ tests/
+format: ## Автоисправление форматирования
+	$(PY) -m ruff check --fix $(SRC)
+	$(PY) -m ruff format $(SRC)
+
+sast: ## Статический анализ безопасности (bandit), отчёт в reports/
+	@echo "$(GREEN)▶ bandit (SAST)$(RESET)"
+	@mkdir -p $(REPORTS)
+	$(PY) -m bandit -c pyproject.toml -r app scripts -f json -o $(REPORTS)/bandit.json -q || true
+	$(PY) -m bandit -c pyproject.toml -r app scripts
+
+audit: ## Уязвимости рабочих зависимостей (pip-audit по requirements.lock), отчёт reports/pip-audit.json
+	@echo "$(GREEN)▶ pip-audit$(RESET)"
+	@mkdir -p $(REPORTS)
+	-$(PY) -m pip_audit -r requirements.lock --no-deps --disable-pip -f json -o $(REPORTS)/pip-audit.json
+	$(PY) -m pip_audit -r requirements.lock --no-deps --disable-pip
+
+lock: ## Пересобрать requirements.lock из requirements.txt в чистом venv
+	rm -rf .lockvenv && $(PY) -m venv .lockvenv
+	.lockvenv/bin/pip install -q -r requirements.txt
+	{ head -n 2 requirements.lock; .lockvenv/bin/pip freeze; } > requirements.lock.new
+	mv requirements.lock.new requirements.lock && rm -rf .lockvenv
+
+policy: ## Запрет пропуска тестов, снижения порогов и исключений без обоснования
+	@echo "$(GREEN)▶ Проверка правил проекта$(RESET)"
+	$(PY) scripts/check_policy.py
+
+# ─── Тесты ───────────────────────────────────────────────────────────────────
+test: ## Все тесты + отчёты (JUnit, покрытие HTML/XML) с порогом покрытия
+	@echo "$(GREEN)▶ pytest (unit + integration)$(RESET)"
+	@mkdir -p $(REPORTS)
+	$(PY) -m pytest --cov --cov-report=term --cov-report=html:$(REPORTS)/htmlcov \
+	  --cov-report=xml:$(REPORTS)/coverage.xml --junitxml=$(REPORTS)/junit.xml
+
+test-unit: ## Только unit-тесты
+	$(PY) -m pytest -m unit
+
+test-integration: ## Только интеграционные тесты (БД, миграции, бэкапы)
+	$(PY) -m pytest -m integration
+
+test-pg: ## Тесты на PostgreSQL (нужен TEST_DATABASE_URL=postgresql+asyncpg://...)
+	@if [ -z "$$TEST_DATABASE_URL" ]; then echo "$(RED)✗ задайте TEST_DATABASE_URL$(RESET)"; exit 1; fi
+	$(PY) -m pytest
+
+mutation: ## Мутационное тестирование бизнес-правил (mutmut), порог MUTATION_MIN
+	@echo "$(GREEN)▶ mutmut: app/services.py$(RESET)"
+	@mkdir -p $(REPORTS) && rm -f .mutmut-cache
+	-$(PY) -m mutmut run --paths-to-mutate app/services.py --tests-dir tests/unit \
+	  --runner "$(PY) -m pytest -x -q -p no:cacheprovider tests/unit" > $(REPORTS)/mutmut.log 2>&1
+	$(PY) scripts/check_mutation.py $(MUTATION_MIN)
 
 # ─── Миграции ────────────────────────────────────────────────────────────────
-migrate: ## Применить все миграции Alembic
-	@echo "$(GREEN)▶ Применение миграций...$(RESET)"
-	$(ALEMBIC) upgrade head
-	@echo "$(GREEN)✔ Миграции применены$(RESET)"
+migrate: ## Применить все миграции (alembic upgrade head)
+	$(PY) -m alembic upgrade head
 
 migrate-down: ## Откатить последнюю миграцию
-	$(ALEMBIC) downgrade -1
+	$(PY) -m alembic downgrade -1
 
-migrate-status: ## Показать состояние миграций
-	$(ALEMBIC) current
-	$(ALEMBIC) history --verbose
+migrate-status: ## Текущая ревизия и история миграций
+	$(PY) -m alembic current
+	$(PY) -m alembic history
+
+migrate-new: ## Создать миграцию: make migrate-new MSG="описание"
+	$(PY) -m alembic revision --autogenerate -m "$(MSG)"
+
+migrate-check: ## Чистая БД с нуля + проверка, что модели совпадают с миграциями
+	@echo "$(GREEN)▶ Миграции на чистой БД + alembic check$(RESET)"
+	@mkdir -p $(REPORTS) && rm -f $(REPORTS)/migrate_check.db
+	APP_ENV=development DATABASE_URL=sqlite+aiosqlite:///./$(REPORTS)/migrate_check.db \
+	  sh -c '$(PY) -m alembic upgrade head && $(PY) -m alembic check'
+
+migrate-check-pg: ## Миграции на PostgreSQL: чистая БД → данные → откат → повторное применение (PG_URL=...)
+	@if [ -z "$$PG_URL" ]; then echo "$(RED)✗ задайте PG_URL=postgresql+asyncpg://...$(RESET)"; exit 1; fi
+	@echo "$(GREEN)▶ Миграции на чистой БД PostgreSQL$(RESET)"
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic downgrade base
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic upgrade head
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic check
+	@echo "$(GREEN)▶ Обновление БД с данными: seed → откат до 0002 → upgrade head$(RESET)"
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m scripts.seed
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic downgrade 0002
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic upgrade head
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic current
+
+seed: ## Наполнить БД демонстрационными данными
+	$(PY) -m scripts.seed
 
 # ─── Резервное копирование ───────────────────────────────────────────────────
-backup: ## Создать резервную копию БД
-	@echo "$(GREEN)▶ Создание резервной копии...$(RESET)"
-	@mkdir -p backups
-	@BACKUP_FILE=backups/dump_$$(date +%Y%m%d_%H%M%S).sql; \
-	  $(COMPOSE) exec -T db pg_dump \
-	    -U $${POSTGRES_USER:-duma_user} \
-	    $${POSTGRES_DB:-city_duma} > $$BACKUP_FILE; \
-	  echo "$(GREEN)✔ Резервная копия: $$BACKUP_FILE$(RESET)"
+backup: ## Резервная копия БД в backups/ (pg_dump или копия SQLite)
+	$(PY) -m scripts.db_backup backup
 
-restore: ## Восстановить резервную копию (BACKUP=backups/dump_xxx.sql)
+restore: ## Восстановление: make restore BACKUP=backups/dump_xxx.sql
 	@if [ -z "$(BACKUP)" ]; then \
 	  echo "$(RED)✗ Укажите файл: make restore BACKUP=backups/dump_xxx.sql$(RESET)"; exit 1; fi
-	@echo "$(YELLOW)⚠  Восстановление из $(BACKUP)...$(RESET)"
-	$(COMPOSE) exec -T db psql \
-	  -U $${POSTGRES_USER:-duma_user} \
-	  $${POSTGRES_DB:-city_duma} < $(BACKUP)
-	@echo "$(GREEN)✔ Восстановление завершено$(RESET)"
+	$(PY) -m scripts.db_backup restore $(BACKUP)
 
-# ─── Безопасность и аудит ────────────────────────────────────────────────────
-security-audit: ## Проверка зависимостей на уязвимости (pip-audit)
-	@echo "$(GREEN)▶ Проверка безопасности зависимостей...$(RESET)"
-	$(PIP) install pip-audit --quiet
-	pip-audit -r requirements.txt || true
-	@echo "$(GREEN)✔ Аудит завершен$(RESET)"
+restore-demo: ## Демонстрация: бэкап → удаление/порча данных → восстановление
+	PY=$(PY) ./scripts/restore_demo.sh
 
-# ─── Полная локальная проверка ────────────────────────────────────────────────
-verify: ## Полный набор локальных проверок (quality + test + security-audit)
-	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
-	@echo "$(GREEN)  Полная проверка проекта$(RESET)"
-	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
-	@$(MAKE) quality
-	@$(MAKE) test
-	@$(MAKE) security-audit
-	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
-	@echo "$(GREEN)  ✔ Все проверки пройдены$(RESET)"
-	@echo "$(GREEN)═══════════════════════════════════════$(RESET)"
+# ─── Единая проверка ─────────────────────────────────────────────────────────
+verify: ## ВЕСЬ обязательный набор проверок: policy, lint, sast, migrate-check, test, mutation
+	@echo "$(GREEN)══════ make verify ══════$(RESET)"
+	@$(MAKE) --no-print-directory policy
+	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory sast
+	@$(MAKE) --no-print-directory migrate-check
+	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory mutation
+	@echo "$(GREEN)  отчёты: $(REPORTS)/junit.xml, $(REPORTS)/htmlcov/index.html$(RESET)"
+	@echo "$(GREEN)══════ ✔ Все проверки пройдены ══════$(RESET)"
 
-# ─── Docker ──────────────────────────────────────────────────────────────────
-up: ## Запустить контейнерное окружение (build + up)
-	@echo "$(GREEN)▶ Запуск контейнеров...$(RESET)"
-	$(COMPOSE) up --build -d
-	@echo "$(GREEN)✔ Приложение доступно на http://localhost:8000$(RESET)"
+clean: ## Удалить отчёты и кэши
+	rm -rf $(REPORTS) .pytest_cache .ruff_cache .coverage .mutmut-cache
 
-down: ## Остановить контейнерное окружение
-	@echo "$(YELLOW)▶ Остановка контейнеров...$(RESET)"
+# ─── Контейнеры (ЛР4) ────────────────────────────────────────────────────────
+docker-build: ## Собрать образ приложения cityduma:$(APP_TAG)
+	$(COMPOSE) build app1
+
+docker-up: ## Поднять окружение: db, migrate, app1, app2, nginx (http://localhost:8080)
+	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) ps
+
+docker-down: ## Остановить окружение (данные в volume сохраняются)
 	$(COMPOSE) down
 
-down-volumes: ## Остановить контейнеры и УДАЛИТЬ данные
-	@echo "$(RED)⚠  Удаление всех данных!$(RESET)"
-	$(COMPOSE) down -v
+docker-ps: ## Состояние контейнеров и healthcheck
+	$(COMPOSE) ps
 
-logs: ## Показать логи приложения
-	$(COMPOSE) logs -f app
+docker-logs: ## Журналы всех контейнеров
+	$(COMPOSE) logs -f --tail=100
 
-# ─── Проверка контейнера ─────────────────────────────────────────────────────
-container-check: ## Проверить работоспособность через health endpoint
-	@echo "$(GREEN)▶ Проверка health endpoint...$(RESET)"
-	@curl -sf http://localhost:8000/health | python -m json.tool || \
-	  (echo "$(RED)✗ Приложение недоступно$(RESET)" && exit 1)
-	@echo "$(GREEN)✔ Приложение работает$(RESET)"
+docker-migrate: ## Применить миграции в контейнерной среде
+	$(COMPOSE) run --rm migrate alembic upgrade head
+	$(COMPOSE) run --rm migrate alembic current
+
+docker-backup: ## Резервная копия БД из контейнера → backups/pg_<время>.dump
+	@mkdir -p $(BACKUP_DIR)
+	@f=$(BACKUP_DIR)/pg_$$(date +%Y%m%d_%H%M%S).dump; \
+	  $(COMPOSE) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > $$f \
+	  && echo "✔ резервная копия: $$f ($$(du -h $$f | cut -f1))"
+
+docker-restore: ## Восстановить БД в контейнере: make docker-restore BACKUP=backups/pg_xxx.dump
+	@if [ -z "$(BACKUP)" ]; then echo "$(RED)✗ make docker-restore BACKUP=backups/<файл>.dump$(RESET)"; exit 1; fi
+	$(COMPOSE) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --clean --if-exists' < $(BACKUP)
+	@echo "✔ восстановлено из $(BACKUP)"
+
+docker-restore-new-volume: ## Восстановить в НОВЫЙ volume: make docker-restore-new-volume BACKUP=... VOLUME=имя
+	@if [ -z "$(BACKUP)" ] || [ -z "$(VOLUME)" ]; then \
+	  echo "$(RED)✗ make docker-restore-new-volume BACKUP=backups/<файл>.dump VOLUME=<новый volume>$(RESET)"; exit 1; fi
+	$(COMPOSE) down
+	PG_VOLUME=$(VOLUME) $(COMPOSE) up -d --wait db
+	PG_VOLUME=$(VOLUME) $(COMPOSE) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --no-owner' < $(BACKUP)
+	PG_VOLUME=$(VOLUME) $(COMPOSE) up -d --wait
+	@echo "✔ окружение работает на volume $(VOLUME); для постоянного использования задайте PG_VOLUME=$(VOLUME) в .env"
+
+container-lint: ## Запреты: latest, root, секреты в образе, отключённый healthcheck, лишние порты
+	PY=$(PY) ./scripts/container_check.sh lint
+
+container-check: ## ПОЛНАЯ проверка контейнерного окружения на отдельном стенде (обязательна перед изменением)
+	PY=$(PY) ./scripts/container_check.sh
+
+# ─── CI (ЛР5): те же этапы, что в GitHub Actions, локально в контейнерах ─────
+ci: ## Весь pipeline локально: style, test, migrations, backup, security, build, container
+	./scripts/ci.sh all
+
+ci-%: ## Один этап CI: make ci-style | ci-test | ci-migrations | ci-backup | ci-security | ci-build | ci-container
+	./scripts/ci.sh $*

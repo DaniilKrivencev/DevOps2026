@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_secretary
 from app.database import get_db
 from app.models import Attendance, Deputy, Session
 from app.schemas import AttendanceCreate, AttendanceOut, AttendanceUpdate
@@ -26,7 +27,12 @@ async def list_attendance(
     return result.scalars().all()
 
 
-@router.post("/", response_model=AttendanceOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    dependencies=[Depends(require_secretary)],
+    response_model=AttendanceOut,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_attendance(data: AttendanceCreate, db: AsyncSession = Depends(get_db)):
     session = await db.get(Session, data.session_id)
     if not session:
@@ -61,7 +67,9 @@ async def get_attendance(attendance_id: int, db: AsyncSession = Depends(get_db))
     return attendance
 
 
-@router.patch("/{attendance_id}", response_model=AttendanceOut)
+@router.patch(
+    "/{attendance_id}", dependencies=[Depends(require_secretary)], response_model=AttendanceOut
+)
 async def update_attendance(
     attendance_id: int, data: AttendanceUpdate, db: AsyncSession = Depends(get_db)
 ):
@@ -75,7 +83,11 @@ async def update_attendance(
     return attendance
 
 
-@router.delete("/{attendance_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{attendance_id}",
+    dependencies=[Depends(require_secretary)],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def delete_attendance(attendance_id: int, db: AsyncSession = Depends(get_db)):
     attendance = await db.get(Attendance, attendance_id)
     if not attendance:

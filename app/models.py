@@ -6,6 +6,7 @@ Entities:
   CommissionMember — M2M: which deputies belong to which commission
   Session     — a formal meeting of a commission
   Attendance  — per-deputy attendance record for a session
+  AgendaItem  — item of a session agenda with a decision (ЛР3, миграция 0004)
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,6 +46,12 @@ class SessionStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
+class AgendaDecision(str, enum.Enum):
+    pending = "pending"
+    adopted = "adopted"
+    rejected = "rejected"
+
+
 # ─── Deputy ──────────────────────────────────────────────────────────────────
 
 
@@ -58,16 +66,26 @@ class Deputy(Base):
     district: Mapped[str | None] = mapped_column(String(100))
     elected_on: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # ЛР3, миграция 0002: контактные данные
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    phone: Mapped[str | None] = mapped_column(String(20))
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Reverse relations
     chaired_commissions: Mapped[list[Commission]] = relationship(
-        "Commission", back_populates="chair", foreign_keys="Commission.chair_id"
+        "Commission",
+        back_populates="chair",
+        foreign_keys="Commission.chair_id",
+        passive_deletes=True,  # ON DELETE SET NULL выполняет БД
     )
     memberships: Mapped[list[CommissionMember]] = relationship(
-        "CommissionMember", back_populates="deputy"
+        "CommissionMember", back_populates="deputy", passive_deletes=True
     )
-    attendances: Mapped[list[Attendance]] = relationship("Attendance", back_populates="deputy")
+    attendances: Mapped[list[Attendance]] = relationship(
+        "Attendance", back_populates="deputy", passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         return f"<Deputy id={self.id} name={self.full_name!r}>"
@@ -84,11 +102,17 @@ class Commission(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    # ЛР3, миграция 0003: архивные комиссии не удаляются, а деактивируются
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     # Business rule: chair MUST be a member of the commission (enforced in API)
     chair_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("deputies.id", ondelete="SET NULL")
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     chair: Mapped[Deputy | None] = relationship(
         "Deputy", back_populates="chaired_commissions", foreign_keys=[chair_id]
@@ -96,7 +120,10 @@ class Commission(Base):
     members: Mapped[list[CommissionMember]] = relationship(
         "CommissionMember", back_populates="commission", cascade="all, delete-orphan"
     )
-    sessions: Mapped[list[Session]] = relationship("Session", back_populates="commission")
+    # ЛР3: без passive_deletes ORM пыталась обнулить commission_id (NOT NULL) → 500
+    sessions: Mapped[list[Session]] = relationship(
+        "Session", back_populates="commission", passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         return f"<Commission id={self.id} name={self.name!r}>"
@@ -136,17 +163,22 @@ class Session(Base):
     commission_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("commissions.id", ondelete="CASCADE"), nullable=False
     )
-    held_on: Mapped[date] = mapped_column(Date, nullable=False)
+    held_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     topic: Mapped[str] = mapped_column(String(500), nullable=False)
     status: Mapped[SessionStatus] = mapped_column(
         Enum(SessionStatus), default=SessionStatus.planned, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     commission: Mapped[Commission] = relationship("Commission", back_populates="sessions")
     attendances: Mapped[list[Attendance]] = relationship(
         "Attendance", back_populates="session", cascade="all, delete-orphan"
+    )
+    agenda_items: Mapped[list[AgendaItem]] = relationship(
+        "AgendaItem", back_populates="session", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -176,3 +208,25 @@ class Attendance(Base):
 
     session: Mapped[Session] = relationship("Session", back_populates="attendances")
     deputy: Mapped[Deputy] = relationship("Deputy", back_populates="attendances")
+
+
+# ─── AgendaItem (ЛР3: новая функция, миграция 0004) ──────────────────────────
+
+
+class AgendaItem(Base):
+    """Пункт повестки заседания и принятое по нему решение."""
+
+    __tablename__ = "agenda_items"
+    __table_args__ = (UniqueConstraint("session_id", "position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    decision: Mapped[AgendaDecision] = mapped_column(
+        Enum(AgendaDecision), default=AgendaDecision.pending, nullable=False
+    )
+
+    session: Mapped[Session] = relationship("Session", back_populates="agenda_items")
