@@ -44,13 +44,13 @@ echo "=== 4. Код приложения в ${APP_DIR} (владелец root, �
 sudo install -d -m 755 "$APP_DIR"
 sudo rm -rf "$APP_DIR/app" "$APP_DIR/alembic"
 sudo cp -r "$SRC_DIR/app" "$SRC_DIR/alembic" "$APP_DIR/"
-sudo cp "$SRC_DIR/alembic.ini" "$SRC_DIR/requirements.txt" "$APP_DIR/"
+sudo cp "$SRC_DIR/alembic.ini" "$SRC_DIR/requirements.txt" "$SRC_DIR/requirements.lock" "$APP_DIR/"
 sudo find "$APP_DIR" -path "$APP_DIR/venv" -prune -o -name '__pycache__' -prune -exec rm -rf {} +
 
-echo "=== 5. Виртуальное окружение и зафиксированные зависимости (requirements.txt) ==="
+echo "=== 5. Виртуальное окружение и зафиксированные зависимости (requirements.txt + requirements.lock) ==="
 [ -d "$APP_DIR/venv" ] || sudo python3 -m venv "$APP_DIR/venv"
 sudo "$APP_DIR/venv/bin/pip" install -q --upgrade pip
-sudo "$APP_DIR/venv/bin/pip" install -q -r "$APP_DIR/requirements.txt"
+sudo "$APP_DIR/venv/bin/pip" install -q -r "$APP_DIR/requirements.txt" -c "$APP_DIR/requirements.lock"
 
 # код и venv принадлежат root; приложение читает, но не может изменить себя
 sudo chown -R root:"$APP_USER" "$APP_DIR"

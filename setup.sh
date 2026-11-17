@@ -23,7 +23,7 @@ echo "▶ 2/5 Виртуальное окружение .venv"
 .venv/bin/python -m pip install --quiet --upgrade pip
 
 echo "▶ 3/5 Установка зафиксированных зависимостей"
-.venv/bin/python -m pip install --quiet -r requirements-dev.txt
+.venv/bin/python -m pip install --quiet -r requirements-dev.txt -c requirements.lock
 
 echo "▶ 4/5 Конфигурация .env"
 if [ ! -f .env ]; then

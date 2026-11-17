@@ -11,9 +11,9 @@ ARG PYTHON_IMAGE=python:3.12.8-slim-bookworm
 FROM ${PYTHON_IMAGE} AS builder
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements.txt requirements.lock /tmp/
 RUN python -m venv /opt/venv \
- && /opt/venv/bin/pip install --no-compile -r /tmp/requirements.txt
+ && /opt/venv/bin/pip install --no-compile -r /tmp/requirements.txt -c /tmp/requirements.lock
 
 # ─── Итоговый образ ──────────────────────────────────────────────────────────
 FROM ${PYTHON_IMAGE} AS runtime

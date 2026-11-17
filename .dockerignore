@@ -6,6 +6,8 @@
 !alembic.ini
 !scripts/
 !requirements.txt
+!requirements.lock
+!requirements-dev.txt
 
 # даже внутри разрешённых каталогов
 **/__pycache__
