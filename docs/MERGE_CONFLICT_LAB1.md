@@ -52,3 +52,33 @@ git checkout develop && git checkout -b demo/b && sed -i '1s/.*/# Городск
 git checkout develop && git merge --no-ff demo/a && git merge --no-ff demo/b   # CONFLICT
 # исправить README.md вручную → git add README.md → git commit
 ```
+
+---
+
+## Конфликт № 2 — через ветку разрешения `conflict/<ветка>`
+
+После первого конфликта команда приняла правило (CONTRIBUTING.md, раздел 1.1):
+конфликт не разрешается прямо в `develop`/`main`, а прогоняется через отдельную
+ветку `conflict/<ветка>`, которая проверяется CI (`ci.yml`: `on: push: conflict/**`)
+и сливается в `develop` обычным запросом на слияние.
+
+| Шаг | Кто | Что |
+|---|---|---|
+| 1 | Кривенцев Даниил | `feature/zapusk-roles`: в таблицу адресов ЗАПУСК.md после `/health` добавлен `/api/v1/auth/me` |
+| 2 | Денисов Роман | `feature/zapusk-instance` от того же `develop`: в то же место добавлен `/nginx-health` |
+| 3 | Герасимов Егор | `feature/zapusk-roles` слита в `develop` без конфликта |
+| 4 | Денисов Роман | `git checkout -b conflict/zapusk-instance develop` → `git merge --no-ff feature/zapusk-instance` → **CONFLICT в ЗАПУСК.md** |
+| 5 | Денисов Роман | конфликт разрешён в ветке `conflict/zapusk-instance` (оставлены обе строки), коммит слияния с пометкой `Conflicts:` |
+| 6 | — | `make verify`, push ветки `conflict/zapusk-instance` → CI |
+| 7 | Герасимов Егор (ревью) | `conflict/zapusk-instance` → `develop` чистым слиянием `--no-ff`, без конфликтов |
+
+```
+*   слияние conflict/zapusk-instance в develop            ← develop получает готовый результат
+|\
+| *   разрешение конфликта ... в ветке conflict/zapusk-instance   (Conflicts: ЗАПУСК.md)
+| |\
+| | * ЗАПУСК.md — адрес проверки nginx /nginx-health     (feature/zapusk-instance)
+* | | слияние feature/zapusk-roles в develop
+```
+
+Посмотреть: `git log --graph --oneline develop -12`, ветка `conflict/zapusk-instance` на GitHub.
