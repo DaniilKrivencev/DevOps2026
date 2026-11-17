@@ -7,6 +7,7 @@
 .PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
         mutation audit lock docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
         docker-backup docker-restore docker-restore-new-volume container-lint container-check ci \
+        cd-deploy cd-rollback cd-status cd-verify cd-demo-images \
         migrate migrate-down migrate-status migrate-new migrate-check migrate-check-pg \
         seed backup restore restore-demo verify clean
 
@@ -216,3 +217,26 @@ ci: ## Весь pipeline локально: style, test, migrations, backup, secu
 
 ci-%: ## Один этап CI: make ci-style | ci-test | ci-migrations | ci-backup | ci-security | ci-build | ci-container
 	./scripts/ci.sh $*
+
+# ─── CD (ЛР6): тестовое окружение staging ────────────────────────────────────
+# Нужны STAGING_HOST и STAGING_SSH_KEY (ключ учётной записи cd-deploy) или DEPLOY_TARGET=local.
+cd-deploy: ## Выпустить тег на staging: make cd-deploy TAG=sha-<commit>|X.Y.Z
+	@if [ -z "$(TAG)" ]; then echo "$(RED)✗ make cd-deploy TAG=sha-<commit>$(RESET)"; exit 1; fi
+	./scripts/cd.sh deploy $(TAG)
+
+cd-rollback: ## Ручной возврат: make cd-rollback [TAG=<тег>] (по умолчанию — предыдущая успешная версия)
+	./scripts/cd.sh rollback $(TAG)
+
+cd-status: ## Версия, история выпусков и контейнеры на staging
+	./scripts/cd.sh status
+
+cd-verify: ## Проверить работающий релиз (контейнеры, /health, /version, основной сценарий)
+	./scripts/cd.sh verify
+
+cd-demo-images: ## Образы «неудачных выпусков» для защиты: make cd-demo-images BASE=<образ:тег>
+	@if [ -z "$(BASE)" ]; then echo "$(RED)✗ make cd-demo-images BASE=ghcr.io/...:sha-...$(RESET)"; exit 1; fi
+	docker build -f deploy/staging/demo/Dockerfile --target broken-health \
+	  --build-arg BASE=$(BASE) --build-arg DEMO_COMMIT=de0000000001 -t $(firstword $(subst :, ,$(BASE))):sha-de0000000001 .
+	docker build -f deploy/staging/demo/Dockerfile --target broken-scenario \
+	  --build-arg BASE=$(BASE) --build-arg DEMO_COMMIT=de0000000002 -t $(firstword $(subst :, ,$(BASE))):sha-de0000000002 .
+	@echo "✔ sha-de0000000001 (healthcheck), sha-de0000000002 (основной сценарий); опубликуйте: docker push <образ>:<тег>"

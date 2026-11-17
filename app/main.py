@@ -87,6 +87,23 @@ async def who_am_i(user: User = Depends(current_user)):
     return {"username": user.username, "role": user.role}
 
 
+# ─── Версия работающего релиза (ЛР6) ─────────────────────────────────────────
+@app.get("/version", tags=["system"])
+async def version():
+    """Какая версия работает: версия кода, коммит и время сборки образа.
+
+    APP_COMMIT и APP_BUILD_TIME задаются при сборке образа (Dockerfile, ARG → ENV);
+    по ним проверка после развёртывания убеждается, что запущен нужный тег.
+    """
+    return {
+        "version": APP_VERSION,
+        "commit": os.getenv("APP_COMMIT", "unknown"),
+        "build_time": os.getenv("APP_BUILD_TIME", "unknown"),
+        "environment": os.getenv("APP_ENV", "development"),
+        "instance": INSTANCE_ID,
+    }
+
+
 # ─── Web UI routes ────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):

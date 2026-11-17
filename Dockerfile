@@ -42,16 +42,20 @@ FROM ${PYTHON_IMAGE} AS runtime
 
 ARG APP_VERSION=0.0.0-dev
 ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
 LABEL org.opencontainers.image.title="cityduma" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
       org.opencontainers.image.source="https://github.com/DaniilKrivencev/DevOps2026"
 
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_ENV=production \
-    APP_PORT=8000
+    APP_PORT=8000 \
+    APP_COMMIT=${GIT_SHA} \
+    APP_BUILD_TIME=${BUILD_TIME}
 
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home --home-dir /nonexistent \
