@@ -6,4 +6,6 @@ base_packages:
   - python3
   - iproute2
   - acl
+  # нужен модулю deb822_repository (репозиторий Docker в роли docker)
+  - python3-debian
 base_manage_hostname: true
