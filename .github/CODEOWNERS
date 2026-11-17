@@ -30,3 +30,11 @@
 /.gitleaks.toml                     @DaniilKrivencev @b0ndikk @Laincetta
 /.gitleaksignore                    @DaniilKrivencev @b0ndikk @Laincetta
 /CONTRIBUTING.md                    @DaniilKrivencev @b0ndikk @Laincetta
+# инфраструктура как код (ЛР7): роли, шаблоны, окружения и секреты
+/infra/ansible/roles/               @DaniilKrivencev @b0ndikk @Laincetta
+/infra/ansible/site.yml             @DaniilKrivencev @b0ndikk @Laincetta
+/infra/ansible/group_vars/          @DaniilKrivencev @b0ndikk @Laincetta
+/infra/ansible/inventories/         @DaniilKrivencev @b0ndikk @Laincetta
+/infra/ansible/ansible.cfg          @DaniilKrivencev @b0ndikk @Laincetta
+/infra/ansible/.ansible-lint        @DaniilKrivencev @b0ndikk @Laincetta
+/scripts/infra_policy.py            @DaniilKrivencev @b0ndikk @Laincetta
