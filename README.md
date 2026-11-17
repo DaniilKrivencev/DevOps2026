@@ -39,12 +39,12 @@
 
 ---
 
-## Быстрый старт (локально)
+## Быстрый старт
 
 ```bash
-./setup.sh          # или make setup: venv, зависимости, .env, миграции, make verify
-make run            # http://localhost:8000  (Swagger: /docs, health: /health)
-make verify         # весь обязательный набор проверок
+cp .env.example .env    # задать POSTGRES_PASSWORD и APP_AUTH_USERS
+make docker-up          # db, migrate, app1, app2, nginx → http://localhost:8080
+make container-check    # проверка контейнерного окружения
 ```
 
 ## Команды
