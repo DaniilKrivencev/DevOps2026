@@ -41,11 +41,22 @@
 
 ## Быстрый старт
 
+**Docker (рекомендуется):**
+
 ```bash
 cp .env.example .env    # задать POSTGRES_PASSWORD и APP_AUTH_USERS
 make docker-up          # db, migrate, app1, app2, nginx → http://localhost:8080
 make container-check    # проверка контейнерного окружения
 ```
+
+**Локально без Docker:**
+
+```bash
+./setup.sh          # Linux/macOS/Git Bash: venv, зависимости, .env, миграции, make verify
+make run            # http://localhost:8000  (Swagger: /docs, health: /health)
+```
+
+Windows (PowerShell): `py -3.12 -m venv .venv; .venv\Scripts\pip install -r requirements-dev.txt -c requirements.lock; Copy-Item .env.example .env; .venv\Scripts\uvicorn app.main:app --reload`
 
 ## Команды
 
