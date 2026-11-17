@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_admin
 from app.database import get_db
 from app.models import Deputy
 from app.schemas import DeputyCreate, DeputyOut, DeputyUpdate
@@ -38,7 +39,12 @@ async def list_deputies(
     return result.scalars().all()
 
 
-@router.post("/", response_model=DeputyOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    dependencies=[Depends(require_admin)],
+    response_model=DeputyOut,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_deputy(data: DeputyCreate, db: AsyncSession = Depends(get_db)):
     deputy = Deputy(**data.model_dump())
     db.add(deputy)
@@ -55,7 +61,7 @@ async def get_deputy(deputy_id: int, db: AsyncSession = Depends(get_db)):
     return deputy
 
 
-@router.patch("/{deputy_id}", response_model=DeputyOut)
+@router.patch("/{deputy_id}", dependencies=[Depends(require_admin)], response_model=DeputyOut)
 async def update_deputy(deputy_id: int, data: DeputyUpdate, db: AsyncSession = Depends(get_db)):
     deputy = await db.get(Deputy, deputy_id)
     if not deputy:
@@ -67,7 +73,9 @@ async def update_deputy(deputy_id: int, data: DeputyUpdate, db: AsyncSession = D
     return deputy
 
 
-@router.delete("/{deputy_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{deputy_id}", dependencies=[Depends(require_admin)], status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_deputy(deputy_id: int, db: AsyncSession = Depends(get_db)):
     deputy = await db.get(Deputy, deputy_id)
     if not deputy:

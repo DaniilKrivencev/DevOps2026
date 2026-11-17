@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_secretary
 from app.database import get_db
 from app.models import AgendaItem, Session
 from app.schemas import AgendaItemCreate, AgendaItemOut, AgendaItemUpdate
@@ -29,6 +30,7 @@ async def list_agenda(session_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post(
     "/sessions/{session_id}/agenda",
+    dependencies=[Depends(require_secretary)],
     response_model=AgendaItemOut,
     status_code=status.HTTP_201_CREATED,
 )
@@ -49,7 +51,9 @@ async def add_agenda_item(
     return item
 
 
-@router.patch("/agenda/{item_id}", response_model=AgendaItemOut)
+@router.patch(
+    "/agenda/{item_id}", dependencies=[Depends(require_secretary)], response_model=AgendaItemOut
+)
 async def update_agenda_item(
     item_id: int, data: AgendaItemUpdate, db: AsyncSession = Depends(get_db)
 ):
@@ -71,7 +75,11 @@ async def update_agenda_item(
     return item
 
 
-@router.delete("/agenda/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/agenda/{item_id}",
+    dependencies=[Depends(require_secretary)],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def delete_agenda_item(item_id: int, db: AsyncSession = Depends(get_db)):
     item = await db.get(AgendaItem, item_id)
     if not item:
