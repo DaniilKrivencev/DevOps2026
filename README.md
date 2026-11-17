@@ -1,5 +1,7 @@
 # Городская Дума — City Council Management System
 
+[![CI](https://github.com/DaniilKrivencev/DevOps2026/actions/workflows/ci.yml/badge.svg)](https://github.com/DaniilKrivencev/DevOps2026/actions/workflows/ci.yml)
+
 > Система учёта депутатов, комиссий, заседаний, повестки и посещаемости городской думы.
 > Сквозной проект курса DevOps: все лабораторные работы ведутся в одном репозитории.
 
@@ -58,6 +60,7 @@ make verify         # весь обязательный набор провер�
 | резервная копия / восстановление | `make backup`, `make restore BACKUP=backups/<файл>`, `make restore-demo` |
 | контейнеры | `make docker-up`, `make docker-down`, `make docker-backup`, `make docker-restore BACKUP=...` |
 | проверка контейнерного окружения | **`make container-check`** (запреты + 12 проверок на отдельном стенде) |
+| pipeline CI локально (в контейнерах) | `make ci`, `make ci-<этап>`; уязвимости зависимостей — `make audit` |
 
 ## Структура
 
@@ -71,6 +74,7 @@ make verify         # весь обязательный набор провер�
 ├── deploy/              # ЛР2: развёртывание на двух Linux-ВМ без контейнеров
 ├── Vagrantfile          # ЛР2: ВМ app + db; ЛР4: ВМ docker
 ├── Dockerfile, .dockerignore, docker-compose.yml, nginx/   # ЛР4
+├── .github/             # ЛР5: workflows CI, CODEOWNERS
 ├── docs/                # ТЗ, API, схема, отчёты по лабораторным
 ├── Makefile             # единый интерфейс команд
 └── CONTRIBUTING.md      # правила внесения изменений (GitFlow, запреты, приёмка)
@@ -84,6 +88,7 @@ make verify         # весь обязательный набор провер�
 | 2 | Развёртывание в Linux-среде | [docs/LAB2_DEPLOYMENT.md](docs/LAB2_DEPLOYMENT.md), `deploy/`, `Vagrantfile` |
 | 3 | Автоматические проверки, миграции, бэкапы | [docs/lab3/README_LAB3.md](docs/lab3/README_LAB3.md), `make verify` |
 | 4 | Контейнеризация и проверка окружения | [docs/LAB4_CONTAINERS.md](docs/LAB4_CONTAINERS.md), `make docker-up`, `make container-check` |
+| 5 | Continuous Integration | [docs/LAB5_CI.md](docs/LAB5_CI.md), `.github/workflows/`, `make ci` |
 
 > История: до объединения код ЛР3 жил в каталоге `lab3/`, а в корне лежала версия ЛР1.
 > Теперь в корне — единое актуальное приложение; состояние ЛР1 доступно по тегу `v0.1.0`.

@@ -6,8 +6,8 @@
 
 .PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
         mutation audit lock docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
-        docker-backup docker-restore docker-restore-new-volume container-lint container-check \
-        migrate migrate-down migrate-status migrate-new migrate-check \
+        docker-backup docker-restore docker-restore-new-volume container-lint container-check ci \
+        migrate migrate-down migrate-status migrate-new migrate-check migrate-check-pg \
         seed backup restore restore-demo verify clean
 
 VENV    := .venv
@@ -121,6 +121,18 @@ migrate-check: ## Чистая БД с нуля + проверка, что мо�
 	APP_ENV=development DATABASE_URL=sqlite+aiosqlite:///./$(REPORTS)/migrate_check.db \
 	  sh -c '$(PY) -m alembic upgrade head && $(PY) -m alembic check'
 
+migrate-check-pg: ## Миграции на PostgreSQL: чистая БД → данные → откат → повторное применение (PG_URL=...)
+	@if [ -z "$$PG_URL" ]; then echo "$(RED)✗ задайте PG_URL=postgresql+asyncpg://...$(RESET)"; exit 1; fi
+	@echo "$(GREEN)▶ Миграции на чистой БД PostgreSQL$(RESET)"
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic downgrade base
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic upgrade head
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic check
+	@echo "$(GREEN)▶ Обновление БД с данными: seed → откат до 0002 → upgrade head$(RESET)"
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m scripts.seed
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic downgrade 0002
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic upgrade head
+	APP_ENV=development DATABASE_URL=$$PG_URL $(PY) -m alembic current
+
 seed: ## Наполнить БД демонстрационными данными
 	$(PY) -m scripts.seed
 
@@ -197,3 +209,10 @@ container-lint: ## Запреты: latest, root, секреты в образе,
 
 container-check: ## ПОЛНАЯ проверка контейнерного окружения на отдельном стенде (обязательна перед изменением)
 	PY=$(PY) ./scripts/container_check.sh
+
+# ─── CI (ЛР5): те же этапы, что в GitHub Actions, локально в контейнерах ─────
+ci: ## Весь pipeline локально: style, test, migrations, backup, security, build, container
+	./scripts/ci.sh all
+
+ci-%: ## Один этап CI: make ci-style | ci-test | ci-migrations | ci-backup | ci-security | ci-build | ci-container
+	./scripts/ci.sh $*

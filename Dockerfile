@@ -5,7 +5,7 @@
 # Безопасность: процесс работает от непривилегированного пользователя app (uid 10001),
 # секретов в образе нет — все настройки передаются переменными окружения при запуске.
 # =============================================================================
-ARG PYTHON_IMAGE=python:3.12.8-slim-bookworm
+ARG PYTHON_IMAGE=python:3.12.16-slim-trixie
 
 # ─── Сборка зависимостей в отдельном слое ────────────────────────────────────
 FROM ${PYTHON_IMAGE} AS builder
@@ -14,6 +14,28 @@ ENV PIP_NO_CACHE_DIR=1 \
 COPY requirements.txt requirements.lock /tmp/
 RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-compile -r /tmp/requirements.txt -c /tmp/requirements.lock
+
+# ─── Инструменты проверок для CI (ЛР5): make, клиент PostgreSQL 16, dev-зависимости ──
+# Собирается только явно (--target ci); исходники монтируются при запуске, поэтому
+# образ зависит лишь от Dockerfile и requirements* и кэшируется между запусками CI.
+FROM builder AS ci
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends make git curl ca-certificates \
+ && . /etc/os-release \
+ && install -d /usr/share/postgresql-common/pgdg \
+ && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+         https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+ && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+         > /etc/apt/sources.list.d/pgdg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client-16 \
+ && rm -rf /var/lib/apt/lists/*
+COPY requirements-dev.txt /tmp/
+RUN /opt/venv/bin/pip install -r /tmp/requirements-dev.txt -c /tmp/requirements.lock
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+WORKDIR /src
 
 # ─── Итоговый образ ──────────────────────────────────────────────────────────
 FROM ${PYTHON_IMAGE} AS runtime

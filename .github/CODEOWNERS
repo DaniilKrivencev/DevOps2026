@@ -1,13 +1,32 @@
-* @DaniilKrivencev
+# Владельцы кода (ЛР5, п. 14–15). Вместе с правилом защиты веток main и develop
+# «Require review from Code Owners» изменение любого файла ниже невозможно слить
+# без одобрения владельца (автор PR не может одобрить сам себя).
+# Команда: @DaniilKrivencev (Кривенцев Д.), @b0ndikk (Денисов Р.), @Laincetta (Герасимов Е.)
 
-# Критические файлы приёмки (требуют обязательного согласования)
-/Makefile @DaniilKrivencev
-/pyproject.toml @DaniilKrivencev
-/Dockerfile @DaniilKrivencev
-/docker-compose.yml @DaniilKrivencev
-/.github/ @DaniilKrivencev
-/.github/workflows/ @DaniilKrivencev
-/tests/ @DaniilKrivencev
-/alembic/versions/ @DaniilKrivencev
-/requirements.txt @DaniilKrivencev
-/CONTRIBUTING.md @DaniilKrivencev
+*                                   @DaniilKrivencev @b0ndikk @Laincetta
+
+# ── Критические файлы приёмки ──────────────────────────────────────────────
+# тесты и правила проверок
+/tests/                             @DaniilKrivencev @b0ndikk
+/pyproject.toml                     @DaniilKrivencev @b0ndikk
+/scripts/check_policy.py            @DaniilKrivencev @b0ndikk
+/scripts/check_mutation.py          @DaniilKrivencev @b0ndikk
+/scripts/acceptance_guard.py        @DaniilKrivencev @b0ndikk
+# единые команды и pipeline
+/Makefile                           @DaniilKrivencev @Laincetta
+/scripts/ci.sh                      @DaniilKrivencev @Laincetta
+/.github/                           @DaniilKrivencev @Laincetta
+# контейнерное окружение
+/Dockerfile                         @DaniilKrivencev @b0ndikk @Laincetta
+/docker-compose.yml                 @DaniilKrivencev @b0ndikk @Laincetta
+/.dockerignore                      @DaniilKrivencev @b0ndikk @Laincetta
+/scripts/container_policy.py        @DaniilKrivencev @b0ndikk @Laincetta
+/scripts/container_check.sh         @DaniilKrivencev @b0ndikk @Laincetta
+# схема БД, зависимости, поиск секретов
+/alembic/versions/                  @DaniilKrivencev @b0ndikk @Laincetta
+/requirements.txt                   @DaniilKrivencev @b0ndikk @Laincetta
+/requirements-dev.txt               @DaniilKrivencev @b0ndikk @Laincetta
+/requirements.lock                  @DaniilKrivencev @b0ndikk @Laincetta
+/.gitleaks.toml                     @DaniilKrivencev @b0ndikk @Laincetta
+/.gitleaksignore                    @DaniilKrivencev @b0ndikk @Laincetta
+/CONTRIBUTING.md                    @DaniilKrivencev @b0ndikk @Laincetta

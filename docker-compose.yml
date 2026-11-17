@@ -17,6 +17,7 @@ x-app-image: &app-image
   image: ${APP_IMAGE:-cityduma}:${APP_TAG:-local}
   build:
     context: .
+    target: runtime
     args:
       APP_VERSION: ${APP_VERSION:-0.0.0-dev}
       GIT_SHA: ${GIT_SHA:-unknown}
@@ -61,7 +62,7 @@ x-app: &app
 
 services:
   db:
-    image: postgres:16.6-alpine
+    image: postgres:16.16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?задайте POSTGRES_USER}
@@ -115,7 +116,7 @@ services:
       INSTANCE_ID: app2
 
   nginx:
-    image: nginxinc/nginx-unprivileged:1.27.3-alpine
+    image: nginxinc/nginx-unprivileged:1.31.7-alpine
     restart: unless-stopped
     <<: *hardening
     volumes:

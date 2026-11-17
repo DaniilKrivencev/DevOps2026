@@ -1,137 +1,136 @@
-# Лабораторная работа №5: Continuous Integration (CI/CD)
-## Полный технический отчет, архитектура пайплайна и руководство к защите
+# Лабораторная работа №5: Continuous Integration
 
----
+## 1. Выбор системы и подключение
 
-## 1. Введение и цели работы
+| Что | Решение | Почему |
+|---|---|---|
+| CI-система | **GitHub Actions** | репозиторий уже на GitHub; не требует своего сервера (GitLab — ~16 ГБ ОЗУ) |
+| Registry | **GitHub Container Registry** `ghcr.io/daniilkrivencev/devops2026` | встроен в GitHub, доступ по `GITHUB_TOKEN` без хранения паролей |
+| Исполнение проверок | **Docker-in-Docker**: сервис `docker:29.9.0-dind` в каждом job | требование от 12.11.2026 — все проверки в DinD |
 
-**Цель работы:** Построение отказоустойчивого, автоматизированного и безопасного CI/CD пайплайна, выступающего обязательным и независимым барьером перед созданием и публикацией артефактов проекта.
+Файлы: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (граф этапов),
+[`.github/workflows/ci-stage.yml`](../.github/workflows/ci-stage.yml) (один этап в DinD),
+[`scripts/ci.sh`](../scripts/ci.sh) (команды этапов), [`.github/CODEOWNERS`](../.github/CODEOWNERS),
+[`scripts/acceptance_guard.py`](../scripts/acceptance_guard.py).
 
-### Реализация требований задания:
-1. **Выбор системы CI:** **GitHub Actions** — нативная облачная CI/CD система для репозитория на GitHub, не требующая выделения 16 GB RAM локально и гарантирующая запуск в чистых виртуальных машинах `ubuntu-latest`.
-2. **Интеграция с репозиторием и реестром:** Подключен GitHub Container Registry (`ghcr.io`), а также сохранена совместимость с локальным Docker Hub / Docker Registry.
-3. **Триггеры пайплайна:** Запуск при отправке изменений (`push`) в `main`, создании/обновлении Pull Request (`pull_request`) в `main`, а также при создании релизных тегов (`v*`).
-4. **Перенос локальных команд:** Команды из `Makefile` (`make quality`, `make test`, `make security-audit`, `make migrate`, `make backup`, `make restore`) перенесены в соответствующие шаги пайплайна без расхождений.
-5. **Разделение пайплайна на независимые стадии (Jobs):**
-   * `lint` — проверка стиля и форматирования (Ruff).
-   * `security` — поиск секретов (Gitleaks) и уязвимостей в пакетах (pip-audit).
-   * `test` — автоматические тесты с отдельной сервисной БД PostgreSQL.
-   * `database-check` — накат и откат миграций (Alembic), проверка резервного копирования и восстановления (pg_dump/psql).
-   * `container-build-and-scan` — сборка Docker-образа в DinD, проверка healthcheck и сканирование уязвимостей (Trivy).
-   * `publish` — сборка и публикация в реестр (`ghcr.io`).
-6. **Docker-in-Docker (DinD, обновление от 12.11.2026):** Все тесты, сервисная база данных и проверка healthcheck контейнера запускаются изолированно в Docker-контейнерах внутри раннера.
-7. **Отдельная тестовая БД:** В джобе `test` развернут сервисный контейнер `postgres:16-alpine`, изолированный от остальных сред.
-8. **Сохранение отчетов:** Отчеты тестов (JUnit XML, Coverage XML), результаты безопасности (pip-audit JSON) и отчеты Trivy (TXT/JSON) загружаются в GitHub Artifacts.
-9. **Кэширование зависимостей:** Включено кэширование pip через `actions/setup-python` и кэширование слоев Docker через GitHub Actions Cache (`type=gha`).
-10. **Тегирование образа по Commit SHA:** Каждому собранному образу присваивается тег `sha-<commit_sha>` (а также `latest` для ветки `main` и семантические теги версий).
-11. **Запрет публикации при сбоях:** Джоб `publish` имеет зависимость:
-    ```yaml
-    needs: [lint, security, test, database-check, container-build-and-scan]
-    ```
-    При падении любой проверки публикация строго блокируется.
-12. **Безопасность секретов:** Пароли и токены передаются исключительно через защищенные переменные (`${{ secrets.GITHUB_TOKEN }}`), в коде секреты отсутствуют.
-13. **Анализ безопасности:** Интегрированы **Gitleaks** (поиск секретов в git-истории), **pip-audit** (уязвимости библиотек) и **Trivy** (уязвимости контейнерного образа).
-14. **Защита критических файлов:** Создан файл [`.github/CODEOWNERS`](../.github/CODEOWNERS), закрепляющий обязательное ревью критических файлов (`Makefile`, `pyproject.toml`, `.github/workflows/*`, `tests/*`, `alembic/*`, `Dockerfile`) владельцем `@DaniilKrivencev`.
+## 2. Pipeline
 
----
-
-## 2. Архитектура CI/CD Pipeline
-
-```mermaid
-flowchart TD
-    Trigger(["Событие: Push / PR / Tag"]) --> Lint["🎨 1. Lint & Quality (Ruff)"]
-    Trigger --> Security["🛡️ 2. Security Scan (Gitleaks + pip-audit)"]
-    Trigger --> Test["🧪 3. Tests (DinD + PostgreSQL Test DB)"]
-    Trigger --> DBCheck["🗄️ 4. Migrations & Backup (Alembic + pg_dump)"]
-    Trigger --> BuildScan["🐳 5. Build, DinD Health & Trivy Scan"]
-
-    Lint --> Barrier{"Все обязательные проверки успешны?"}
-    Security --> Barrier
-    Test --> Barrier
-    DBCheck --> Barrier
-    BuildScan --> Barrier
-
-    Barrier -- "НЕТ (Ошибка в тесте/линтере/секретах)" --> Blocked["❌ Остановка Pipeline\nПубликация ЗАПРЕЩЕНА"]
-    Barrier -- "ДА (Ветка main / Tag)" --> Publish["🚀 6. Publish Docker Image (ghcr.io:sha-xxxx)"]
+```
+push (main, develop, feature/**, release/**, hotfix/**, теги v*) · pull_request (в main, develop)
+ │
+ ├─ 0. guard       критические файлы приёмки, запрет удаления тестов
+ ├─ 1. style       make policy lint
+ ├─ 2. test        make test на отдельной тестовой БД PostgreSQL + make mutation
+ ├─ 3. migrations  make migrate-check (чистая БД) + make migrate-check-pg (БД с данными, откат)
+ ├─ 4. backup      make restore-demo на PostgreSQL: бэкап → порча данных → восстановление
+ ├─ 5. security    make sast (bandit) + make audit (pip-audit) + gitleaks (секреты, вся история)
+ ├─ 6. build       образ ghcr.io/…:sha-<12 символов SHA> → артефакт image.tar.gz
+ │     └─ 7. container   make container-check на ЭТОМ образе + trivy (уязвимости образа)
+ │
+ └─ 8. publish     needs: [0…7] и только push в main / тег vX.Y.Z → docker push
 ```
 
----
+Каждый этап — отдельный job (`ci-stage.yml`), в котором:
 
-## 3. Таблица соответствия пунктов задания
+1. запускается сервис `docker:dind` (TLS, порт 2376); раннер работает только как клиент
+   (`DOCKER_HOST=tcp://localhost:2376`), **все контейнеры создаёт демон DinD**;
+2. образ инструментов `cityduma-ci:<хэш зависимостей>` (`Dockerfile`, `--target ci`:
+   Python, dev-зависимости, make, клиент PostgreSQL 16) берётся из кэша или собирается;
+3. `scripts/ci.sh <этап>` выполняет в этом контейнере **те же цели Makefile**, что и разработчик;
+4. отчёты из `reports/` сохраняются как артефакты `reports-<этап>`.
 
-| № | Требование задания | Реализация в проекте |
+## 3. Выполнение требований
+
+| № | Требование | Реализация |
 |---|---|---|
-| 1 | Выбор системы CI | GitHub Actions (`.github/workflows/ci.yml`) |
-| 2 | Подключение репозитория и реестра | GitHub Packages (`ghcr.io`) + Docker Buildx |
-| 3 | Триггеры (push, PR, main) | Секция `on: push (main, tags: v*), pull_request (main)` |
-| 4 | Перенос локальных команд | `make quality`, `pytest`, `alembic`, `pg_dump`, `curl /health` |
-| 5 | Разделение на стадии + DinD | 6 отдельных jobs: `lint`, `security`, `test`, `database-check`, `container-build-and-scan`, `publish` в DinD |
-| 6 | Отдельная тестовая БД | Сервисный контейнер `postgres:16-alpine` в джобе `test` |
-| 7 | Сохранение отчетов | `actions/upload-artifact@v4`: junit xml, coverage xml, pip-audit json, trivy reports |
-| 8 | Кэширование зависимостей | `cache: 'pip'` в setup-python + `type=gha` в Docker Buildx |
-| 9 | Тег образа по commit SHA | `type=sha,prefix=sha-,format=short` в docker/metadata-action |
-| 10 | Запрет публикации при ошибке | `needs: [lint, security, test, database-check, container-build-and-scan]` |
-| 11 | Защищенные переменные | Передача через `${{ secrets.GITHUB_TOKEN }}` и env-контекст раннера |
-| 12 | Поиск секретов, зависимостей и образа | Gitleaks v2, pip-audit, Trivy vulnerability scanner |
-| 13 | Защита критических файлов | Регламент в [CONTRIBUTING.md](../CONTRIBUTING.md) |
-| 14 | CODEOWNERS / правила согласования | [`.github/CODEOWNERS`](../.github/CODEOWNERS) |
-| 15 | Демонстрация защиты от подмены | Попытка удалить тест или отключить линтер требует аппрува Code Owner |
-| 16 | Успешное прохождение и остановка | Зеленый пайплайн для корректных коммитов, красный — для дефектных |
+| 1 | Выбор CI | GitHub Actions (обоснование — раздел 1) |
+| 2 | Репозиторий и registry | workflow в репозитории; публикация в `ghcr.io` (допускается и локальный registry: `REGISTRY=localhost:5000 scripts/ci.sh publish`) |
+| 3 | Запуск при push, MR и изменении основной ветки | `on: push` (все ветки GitFlow и теги `v*`), `pull_request` в `main`/`develop` |
+| 4 | Те же команды, что локально | `scripts/ci.sh` вызывает `make policy lint test mutation migrate-check sast audit container-check …`; локально `make ci` / `make ci-<этап>` |
+| 5 | Этапы | guard, стиль, тесты, миграции, резервное копирование, безопасность, сборка, контейнерная проверка, публикация |
+| 6 | Всё в DinD | сервис `docker:dind` в каждом job; тесты, БД, сборка, compose-стенд, сканеры — контейнеры внутри DinD |
+| 7 | Отдельная тестовая БД | одноразовый `postgres:16.16-alpine` в tmpfs, своя сеть и случайный пароль на каждый запуск; `TEST_DATABASE_URL` используется только при `APP_ENV=test` |
+| 8 | Отчёты | JUnit (`junit.xml`), покрытие (`coverage.xml`, `htmlcov/`), mutmut, bandit, pip-audit, gitleaks, trivy, журналы стенда — артефакты `reports-<этап>` |
+| 9 | Кэширование зависимостей | `actions/cache`: образ инструментов с установленными зависимостями (`docker save`), ключ — хэш `Dockerfile` и `requirements*` |
+| 10 | Тег по commit SHA | `sha-<первые 12 символов SHA>`; для тега `vX.Y.Z` — ещё `X.Y.Z`; `latest` не используется |
+| 11 | Нет публикации при ошибке | `publish.needs` — все обязательные этапы; публикуется ровно тот образ, что прошёл `container-check` и trivy |
+| 12 | Секреты в защищённых переменных | registry — `secrets.GITHUB_TOKEN` (передаётся только в этап publish); пароли тестовых БД генерируются на лету; в репозитории секретов нет |
+| 13 | Секреты, зависимости, образ | gitleaks (`.gitleaks.toml`, вся история), pip-audit (`requirements.lock`, ошибка при уязвимости), trivy (CRITICAL с исправлением — ошибка, полный отчёт HIGH/CRITICAL в `trivy.txt`) |
+| 14–15 | Защита критических файлов | `CODEOWNERS` + правило защиты веток (раздел 5) + этап `guard` |
+| 16 | Ослабление не проходит незаметно | удаление теста → `guard` красный; снижение порога / `noqa` без обоснования → `make policy` красный; `latest`/root/отключённый healthcheck → `container-lint` красный; правка workflow → обязательное ревью владельца |
+| 17 | Зелёный CI для корректного изменения и красный для дефектного | раздел 6 |
 
----
+Зависимости обновлены перед включением строгого `pip-audit`: было 11 известных уязвимостей
+(starlette, jinja2, python-dotenv) — см. коммит «обновление уязвимых зависимостей».
 
-## 4. Порядок демонстрации на защите
+## 4. Совпадение локальных и серверных проверок
 
-Преподаватель проверяет выполнение лабораторной работы по 5 ключевым сценариям. Ниже приведены инструкции и команды для каждого сценария:
+```bash
+make verify          # быстрый локальный контур (venv)
+make ci              # весь pipeline локально в контейнерах — тот же scripts/ci.sh, что в CI
+make ci-test         # один этап
+```
 
-### Сценарий 1: Сломать тест или миграцию и показать остановку pipeline
-1. Создайте отдельную ветку:
-   ```bash
-   git checkout -b test/fail-demo
-   ```
-2. Намеренно сломайте тест в `tests/test_api.py` (например, измените `assert r.status_code == 200` на `assert r.status_code == 418` в `test_health`).
-3. Закоммитьте и отправьте в репозиторий:
-   ```bash
-   git add tests/test_api.py
-   git commit -m "test: simulate test failure"
-   git push origin test/fail-demo
-   ```
-4. **Что показать преподавателю:**
-   * В интерфейсе GitHub вкладка **Actions**: джоб `test` окрасился в **красный цвет** (FAILED).
-   * Джоб `publish` находится в статусе `Skipped` / `Blocked`.
-   * Артефакт `test-reports` доступен для скачивания с подробным отчетом о падении теста.
+Почему это важно: CI — независимый барьер, но если в нём выполняются другие команды,
+то «локально зелёное» не гарантирует «в CI зелёное» и наоборот: разработчик не может
+воспроизвести падение, а проверки расходятся (configuration drift). Один `Makefile`,
+одни версии инструментов (`requirements-dev.txt`, образ `cityduma-ci`) и один сценарий
+`scripts/ci.sh` дают одинаковый результат на ноутбуке и на сервере.
 
-### Сценарий 2: Добавить тестовый секрет и показать его обнаружение
-1. В ветке добавьте файл с тестовым приватным ключом или AWS-токеном:
-   ```bash
-   echo "AWS_SECRET_ACCESS_KEY=AKIAIMNOXYZKEY123456" > secret_leak.txt
-   git add secret_leak.txt
-   git commit -m "chore: test secret leak"
-   git push origin test/fail-demo
-   ```
-2. **Что показать преподавателю:**
-   * Джоб `security` немедленно завершается с ошибкой.
-   * Лог Gitleaks указывает точный файл `secret_leak.txt` и тип утекшего токена.
-   * Весь пайплайн заблокирован, публикация невозможна.
+## 5. Защита критических файлов
 
-### Сценарий 3: Показать, что образ не публикуется после ошибки
-1. **Что показать преподавателю:**
-   * В описании джоба `publish` открыть блок `needs`:
-     ```yaml
-     needs: [lint, security, test, database-check, container-build-and-scan]
-     ```
-   * В интерфейсе GitHub Actions видно, что пока хоть одна из проверок красная, задача сборки и публикации в реестр (`ghcr.io`) даже не запускается.
-   * Вкладка **Packages** на GitHub содержит только те образы, которые прошли 100% всех проверок из ветки `main`.
+1. **CODEOWNERS** — у тестов, `Makefile`, `pyproject.toml`, правил проверок, workflow, Dockerfile,
+   миграций и зависимостей указаны владельцы.
+2. **Защита веток** (настраивает владелец репозитория: *Settings → Branches → Add rule* для `main` и `develop`):
+   - Require a pull request before merging → Require approvals: 1 → **Require review from Code Owners**;
+   - Require status checks to pass → выбрать все этапы `CI` (guard, style, test, …, container);
+   - Do not allow bypassing the above settings; запрет force push.
+3. **Этап guard** (`scripts/acceptance_guard.py`): список изменённых критических файлов в отчёте job'а;
+   уменьшение числа тестов останавливает pipeline, если на PR нет метки `allow-test-removal`.
+4. **Политики**: `scripts/check_policy.py` (пропуск тестов, пороги, исключения анализаторов),
+   `scripts/container_policy.py` (latest, root, секреты, healthcheck, порты).
 
-### Сценарий 4: Показать защиту критических файлов через CODEOWNERS
-1. **Что показать преподавателю:**
-   * Файл [`.github/CODEOWNERS`](../.github/CODEOWNERS).
-   * Попытка изменить `Makefile`, `tests/` или `.github/workflows/ci.yml` через Pull Request автоматически назначает обязательными ревьюерами владельцев репозитория (`@DaniilKrivencev`).
-   * Кнопка `Merge pull request` заблокирована GitHub до получения аппрува от владельца критического файла.
-   * Это предотвращает сценарий, когда разработчик незаметно коммитит ослабление правил линтера или удаление тестов.
+## 6. Демонстрация на защите
 
-### Сценарий 5: Объяснить, почему локальные и серверные проверки должны совпадать
-1. **Что объяснить преподавателю:**
-   * Разработчик перед отправкой коммита запускает локально единую команду `make verify` (включающую `make quality`, `make test`, `make security-audit`).
-   * CI-пайплайн на сервере выполняет те же самые цели `Makefile` и те же версии инструментов (`ruff`, `pytest`, `alembic`, `pg_dump`).
-   * **Причина совпадения:** устранение проблемы *"у меня локально все работает, а на сервере упало"* (Configuration Drift). Единый интерфейс гарантирует 100% повторяемость результатов проверок на машине разработчика и в CI-раннере.
+Ветка для демонстраций: `git checkout -b feature/ci-demo develop`.
+
+**1. Сломать тест или миграцию → pipeline останавливается**
+```bash
+# бизнес-правило кворума: > 50% → >= 50%
+sed -i 's/present \* 2 > total/present * 2 >= total/' app/services.py
+git commit -am "demo: дефект в правиле кворума" && git push -u origin feature/ci-demo
+```
+Actions: `2. Тесты` — красный (тест кворума и мутационный порог), `8. Публикация` — не запускается.
+Вариант с миграцией: в новой ревизии сослаться на несуществующую колонку → красный `3. Миграции`.
+
+**2. Тестовый секрет обнаруживается**
+```bash
+# секрет генерируется на месте и в репозиторий заранее не кладётся
+python3 -c "import secrets,string; print('GITHUB_TOKEN=ghp_' + ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(36)))" > leak.env.txt
+git add leak.env.txt && git commit -m "demo: секрет" && git push
+```
+`5. Безопасность` → gitleaks: `RuleID: github-pat, File: leak.env.txt`; отчёт `reports-security/gitleaks.json`.
+После демонстрации: `git revert HEAD` (секрет считается скомпрометированным — его нужно отозвать).
+
+**3. После ошибки образ не публикуется**: в графе job'ов `8. Публикация` в состоянии *skipped*;
+в *Packages* нет образа с `sha-<этот коммит>`. Публикация возможна только из `main` и тегов.
+
+**4. Защита критических файлов**
+```bash
+git rm tests/unit/test_services.py && git commit -m "demo: удаляю тесты" && git push
+```
+`0. Защита файлов приёмки` — красный: «количество тестов уменьшилось». В PR GitHub требует
+ревью владельца из CODEOWNERS, кнопка Merge заблокирована. Снижение `fail_under` в
+`pyproject.toml` → красный `1. Стиль` (`make policy`).
+
+**5. Корректное изменение → всё зелёное**: изменение README или новая функция с тестами —
+все этапы зелёные; при слиянии в `main` появляется образ `ghcr.io/daniilkrivencev/devops2026:sha-…`.
+
+## 7. Локальный запуск этапов
+
+```bash
+make ci-guard ci-style ci-test ci-migrations ci-backup ci-security ci-build ci-container
+make ci                       # все подряд
+```
+
+Нужен только Docker: Python-инструменты, PostgreSQL и сканеры запускаются в контейнерах.

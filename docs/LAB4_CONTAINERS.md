@@ -20,7 +20,7 @@
 
 | Файл | Назначение |
 |---|---|
-| [`Dockerfile`](../Dockerfile) | двухэтапная сборка, `python:3.12.8-slim-bookworm`, пользователь `app` (10001), HEALTHCHECK, STOPSIGNAL |
+| [`Dockerfile`](../Dockerfile) | двухэтапная сборка, `python:3.12.16-slim-trixie`, пользователь `app` (10001), HEALTHCHECK, STOPSIGNAL |
 | [`.dockerignore`](../.dockerignore) | «запретить всё, разрешить нужное»: в контекст попадают только `app/`, `alembic/`, `scripts/`, `requirements.txt` |
 | [`docker-compose.yml`](../docker-compose.yml) | db, migrate, app1, app2, nginx; сети, volume, healthcheck, порядок запуска, лимиты |
 | [`nginx/nginx.conf`](../nginx/nginx.conf) | upstream из двух экземпляров, `max_fails`, `proxy_next_upstream`, `limit_req` |
@@ -45,7 +45,7 @@ make docker-down
 | № | Требование | Решение |
 |---|---|---|
 | 1 | Dockerfile и .dockerignore | `Dockerfile`, `.dockerignore` (deny-all + allowlist) |
-| 2 | Воспроизводимая сборка | точная версия базового образа (`3.12.8-slim-bookworm`, при необходимости — digest через `--build-arg PYTHON_IMAGE=python@sha256:...`); зависимости с `==`; отдельный слой зависимостей (кэш, пока не изменился `requirements.txt`); узкий контекст сборки; тег образа = версия + SHA коммита (`make` задаёт `APP_TAG`) |
+| 2 | Воспроизводимая сборка | точная версия базового образа (`3.12.16-slim-trixie`, при необходимости — digest через `--build-arg PYTHON_IMAGE=python@sha256:...`); зависимости с `==`; отдельный слой зависимостей (кэш, пока не изменился `requirements.txt`); узкий контекст сборки; тег образа = версия + SHA коммита (`make` задаёт `APP_TAG`) |
 | 3 | Непривилегированный пользователь | `USER 10001:10001`; код принадлежит root и только читается; `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`; nginx — образ `nginx-unprivileged` (uid 101) |
 | 4 | Настройки через переменные окружения | `DATABASE_URL`, `AUTH_USERS`, `LOG_LEVEL` и др. задаются в `docker-compose.yml` из `.env`; в образе только несекретные `APP_ENV`, `PATH` |
 | 5 | Корректное завершение по сигналу | exec-форма `CMD` → uvicorn получает SIGTERM (через `init: true`/tini), перестаёт принимать запросы, ждёт текущие до 15 с (`--timeout-graceful-shutdown`), в `lifespan` закрывает пул соединений с БД; `stop_grace_period: 20s` > 15 с |
@@ -88,7 +88,7 @@ make docker-down
 
 | № | Пункт | Решение |
 |---|---|---|
-| 20 | Nginx отдельным контейнером | сервис `nginx` (`nginx-unprivileged:1.27.3-alpine`) |
+| 20 | Nginx отдельным контейнером | сервис `nginx` (`nginx-unprivileged:1.31.7-alpine`) |
 | 21 | Нет доступа в обход Nginx | у app1/app2 только `expose`, без `ports`; опубликован только 8080 |
 | 22 | ≥ 2 экземпляра | `app1`, `app2` (общий шаблон `x-app`) |
 | 23 | Распределение запросов | `upstream` round-robin, `keepalive` |

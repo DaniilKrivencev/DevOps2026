@@ -1,0 +1,119 @@
+# =============================================================================
+# Один этап CI в Docker-in-Docker (ЛР5). Вызывается из ci.yml для каждого этапа.
+# Все команды этапа выполняются демоном docker:dind (сервис job'а):
+# контейнер инструментов, тестовая БД, сборка и проверка образов.
+# Раннер только передаёт команды — тот же scripts/ci.sh запускается локально.
+# =============================================================================
+name: ci-stage
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: "Этап scripts/ci.sh"
+        required: true
+        type: string
+      fetch-depth:
+        description: "Глубина истории git (0 — вся история, для поиска секретов)"
+        type: number
+        default: 1
+      needs-image:
+        description: "Загрузить образ, собранный этапом build"
+        type: boolean
+        default: false
+      publish:
+        description: "Этап публикации: передать учётные данные registry"
+        type: boolean
+        default: false
+      guard-base:
+        description: "База сравнения для этапа guard"
+        type: string
+        default: ""
+      allow-test-removal:
+        description: "Удаление тестов согласовано (метка PR allow-test-removal)"
+        type: boolean
+        default: false
+
+# права (contents: read; packages: write — только у publish) задаёт вызывающий job в ci.yml
+
+jobs:
+  run:
+    name: ${{ inputs.stage }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      dind:
+        image: docker:29.9.0-dind
+        options: >-
+          --privileged
+          --health-cmd "docker info"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+        env:
+          DOCKER_TLS_CERTDIR: /certs
+        ports:
+          - 2376:2376     # Docker API (TLS)
+          - 18080:18080   # nginx стенда make container-check
+        volumes:
+          - /tmp/dind-certs:/certs
+          # каталог раннера по тому же пути: bind-mount исходников в контейнеры
+          # работает так же, как с локальным docker (GitHub-hosted runner)
+          - /home/runner/work:/home/runner/work
+    env:
+      DOCKER_HOST: tcp://localhost:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /tmp/dind-certs/client
+      CI_CACHE_DIR: .ci-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+
+      - name: Доступ к Docker-in-Docker
+        run: |
+          sudo chmod -R a+rX /tmp/dind-certs
+          docker version --format 'client {{.Client.Version}} → dind server {{.Server.Version}}'
+
+      - name: Кэш зависимостей (образ инструментов cityduma-ci)
+        uses: actions/cache@v4
+        with:
+          path: .ci-cache
+          key: ci-tools-${{ hashFiles('Dockerfile', 'requirements.txt', 'requirements.lock', 'requirements-dev.txt') }}
+
+      - name: Образ из этапа build
+        if: inputs.needs-image
+        uses: actions/download-artifact@v4
+        with:
+          name: image
+          path: reports
+
+      - name: scripts/ci.sh ${{ inputs.stage }}
+        env:
+          REGISTRY_USER: ${{ inputs.publish && github.actor || '' }}
+          REGISTRY_PASSWORD: ${{ inputs.publish && secrets.GITHUB_TOKEN || '' }}
+          GUARD_BASE: ${{ inputs.guard-base }}
+          GUARD_ALLOW_TEST_REMOVAL: ${{ inputs.allow-test-removal && '1' || '' }}
+        run: ./scripts/ci.sh "${{ inputs.stage }}"
+
+      - name: Образ для следующих этапов
+        if: inputs.stage == 'build'
+        uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: |
+            reports/image.tar.gz
+            reports/image.txt
+          retention-days: 3
+
+      - name: Отчёты этапа
+        if: always() && inputs.stage != 'build' && inputs.stage != 'publish'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ inputs.stage }}
+          path: |
+            reports/
+            !reports/image.tar.gz
+          if-no-files-found: ignore
+          retention-days: 14

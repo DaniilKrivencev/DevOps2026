@@ -22,7 +22,8 @@ PYEOF
 echo "▶ 1. Миграции и демо-данные"
 $PY -m alembic upgrade head
 $PY -m scripts.seed
-count
+BEFORE=$(count)
+echo "$BEFORE"
 
 echo "▶ 2. Резервная копия"
 mkdir -p backups
@@ -48,5 +49,11 @@ count
 
 echo "▶ 4. Восстановление из $DUMP"
 $PY -m scripts.db_backup restore "$DUMP"
-count
-echo "✔ Данные восстановлены"
+AFTER=$(count)
+echo "$AFTER"
+# автоматическая проверка (используется в CI): данные совпадают с состоянием до порчи
+if [ "$BEFORE" != "$AFTER" ]; then
+  echo "✗ Восстановленные данные не совпадают с исходными" >&2
+  exit 1
+fi
+echo "✔ Данные восстановлены и совпадают с резервной копией"
