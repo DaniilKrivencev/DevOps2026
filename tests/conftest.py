@@ -22,6 +22,9 @@ import app.models  # noqa: F401 — импорт регистрирует мод
 from app.database import Base, get_db, make_engine
 from app.main import app as fastapi_app
 
+ADMIN = ("admin", "admin")
+SECRETARY = ("secretary", "secretary")
+
 PG_TEST_URL = os.getenv("TEST_DATABASE_URL", "")
 USE_POSTGRES = PG_TEST_URL.startswith("postgresql")
 
@@ -61,9 +64,29 @@ async def client(db_engine):
             yield session
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
-    async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
+    # По умолчанию тесты работают от администратора (демо-учётка DEV_USERS).
+    async with AsyncClient(
+        transport=ASGITransport(app=fastapi_app), base_url="http://test", auth=ADMIN
+    ) as ac:
         yield ac
     fastapi_app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def make_client(client):
+    """Клиент с другими учётными данными (None — анонимный) на той же тестовой БД."""
+    opened = []
+
+    def _make(auth=None):
+        ac = AsyncClient(
+            transport=ASGITransport(app=fastapi_app), base_url="http://test", auth=auth
+        )
+        opened.append(ac)
+        return ac
+
+    yield _make
+    for ac in opened:
+        await ac.aclose()
 
 
 # ─── Фабрики тестовых данных ──────────────────────────────────────────────────
