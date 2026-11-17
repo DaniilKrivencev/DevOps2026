@@ -40,3 +40,4 @@ reports/
 Thumbs.db
 .lockvenv/
 .ci-cache/
+deploy/cd_deploy_key*
