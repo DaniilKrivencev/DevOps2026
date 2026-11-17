@@ -1,0 +1,64 @@
+---
+# Пользователи: администратор (sudo, вход только по ключу) и учётная запись
+# pipeline для CD (без пароля и sudo, ключ ограничен командой развёртывания).
+- name: Группа docker (до установки Docker — чтобы добавить в неё cd-deploy)
+  ansible.builtin.group:
+    name: docker
+    system: true
+
+- name: Администратор {{ admin_user }}
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    shell: /bin/bash
+    groups: [sudo]
+    append: true
+    password_lock: true
+
+- name: Права sudo администратора (проверка visudo)
+  ansible.builtin.template:
+    src: sudoers-admin.j2
+    dest: "/etc/sudoers.d/90-{{ admin_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Каталог .ssh администратора
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}/.ssh"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+- name: Ключи администратора
+  ansible.builtin.template:
+    src: authorized_keys-admin.j2
+    dest: "/home/{{ admin_user }}/.ssh/authorized_keys"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+
+- name: Учётная запись pipeline {{ deploy_user }}
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    shell: /bin/bash
+    groups: [docker]
+    append: true
+    password_lock: true
+
+- name: Каталог .ssh учётной записи pipeline
+  ansible.builtin.file:
+    path: "/home/{{ deploy_user }}/.ssh"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0700"
+
+- name: Ключ pipeline — только команда cityduma-deploy
+  ansible.builtin.template:
+    src: authorized_keys-deploy.j2
+    dest: "/home/{{ deploy_user }}/.ssh/authorized_keys"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0600"
