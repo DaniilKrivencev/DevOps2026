@@ -1,0 +1,133 @@
+# =============================================================================
+# Инфраструктура как код (ЛР7): отдельный pipeline для Ansible.
+#
+#   1. lint           yamllint, ansible-lint (профиль production), синтаксис всех
+#                     окружений, требования к инфраструктурному коду (scripts/infra_policy.py)
+#   2. clean-machine  «чистая машина» в контейнере: подготовка с нуля → повторный
+#                     запуск без изменений → ручные изменения → восстановление → проверка
+#   3. apply          применение к окружению staging / production: --check --diff,
+#                     применение, повторный запуск (changed=0), проверка доступности.
+#                     Только вручную (Run workflow) или для main при vars.INFRA_AUTO_STAGING=true;
+#                     environment production — с обязательным подтверждением.
+# =============================================================================
+name: Infrastructure (Ansible)
+
+on:
+  push:
+    branches: ["main", "develop", "feature/**", "release/**", "hotfix/**", "conflict/**"]
+    paths:
+      - "infra/**"
+      - "deploy/staging/remote.sh"
+      - "docker-compose.yml"
+      - "nginx/**"
+      - "scripts/infra.sh"
+      - "scripts/infra_policy.py"
+      - ".github/workflows/infra.yml"
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "infra/**"
+      - "deploy/staging/remote.sh"
+      - "docker-compose.yml"
+      - "nginx/**"
+      - "scripts/infra.sh"
+      - "scripts/infra_policy.py"
+      - ".github/workflows/infra.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Окружение"
+        type: choice
+        options: [staging, production]
+        default: staging
+      mode:
+        description: "check — только показать изменения; apply — применить"
+        type: choice
+        options: [check, apply]
+        default: check
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    name: "1. Проверка кода Ansible"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make infra-lint
+        run: make infra-lint PY=python3
+
+  clean-machine:
+    name: "2. Чистая машина: подготовка, повторяемость, восстановление"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: make infra-test
+        env:
+          # чтение образа приложения из ghcr.io, если пакет приватный
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: make infra-test
+      - name: Журналы запусков Ansible
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-test-logs
+          path: reports/infra-test-*.log
+          if-no-files-found: ignore
+
+  apply:
+    name: "3. ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}"
+    needs: [lint, clean-machine]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.INFRA_AUTO_STAGING == 'true')
+    runs-on: ${{ fromJSON(vars.CD_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
+      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+      ANSIBLE_SSH_KEY: ${{ secrets.ANSIBLE_SSH_KEY }}
+      # пользователь для входа на узлы окружения (после первичной настройки — duma-admin)
+      ANSIBLE_REMOTE_USER: ${{ vars.ANSIBLE_REMOTE_USER || 'duma-admin' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Секреты окружения заданы
+        run: |
+          [ -n "$ANSIBLE_VAULT_PASSWORD" ] || { echo "::error::нет секрета ANSIBLE_VAULT_PASSWORD"; exit 1; }
+          [ -n "$ANSIBLE_SSH_KEY" ] || { echo "::error::нет секрета ANSIBLE_SSH_KEY"; exit 1; }
+      - name: Что изменится (--check --diff)
+        run: |
+          ./scripts/infra.sh ansible-playbook -i "inventories/$ENV/hosts.yml" site.yml --check --diff \
+            -e ansible_user="$ANSIBLE_REMOTE_USER" -e ansible_ssh_private_key_file=~/.ssh/ansible.key
+      - name: Применение
+        if: env.MODE == 'apply'
+        run: |
+          ./scripts/infra.sh ansible-playbook -i "inventories/$ENV/hosts.yml" site.yml \
+            -e ansible_user="$ANSIBLE_REMOTE_USER" -e ansible_ssh_private_key_file=~/.ssh/ansible.key
+      - name: Повторный запуск — изменений быть не должно
+        if: env.MODE == 'apply'
+        run: |
+          ./scripts/infra.sh ansible-playbook -i "inventories/$ENV/hosts.yml" site.yml \
+            -e ansible_user="$ANSIBLE_REMOTE_USER" -e ansible_ssh_private_key_file=~/.ssh/ansible.key | tee second.log
+          changed=$(grep -oE 'changed=[0-9]+' second.log | awk -F= '{s+=$2} END {print s+0}')
+          echo "### Повторный запуск: changed=$changed" >> "$GITHUB_STEP_SUMMARY"
+          [ "$changed" = 0 ] || { echo "::error::повторный запуск изменил $changed ресурс(ов)"; exit 1; }
+      - name: Проверка доступности приложения
+        if: env.MODE == 'apply'
+        run: |
+          ./scripts/infra.sh ansible-playbook -i "inventories/$ENV/hosts.yml" verify.yml \
+            -e ansible_user="$ANSIBLE_REMOTE_USER" -e ansible_ssh_private_key_file=~/.ssh/ansible.key
