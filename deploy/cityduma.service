@@ -1,6 +1,13 @@
+# systemd-служба приложения «Городская Дума» (ЛР2).
+# Устанавливается deploy/deploy_app.sh в /etc/systemd/system/cityduma.service.
 [Unit]
 Description=City Duma Management System (FastAPI)
-After=network.target
+Documentation=https://github.com/DaniilKrivencev/DevOps2026
+After=network-online.target
+Wants=network-online.target
+# не более 5 аварийных перезапусков за 2 минуты, дальше — состояние failed
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -8,11 +15,27 @@ User=duma-app
 Group=duma-app
 WorkingDirectory=/opt/cityduma
 
+# настройки и секреты — отдельно от кода (права 640 root:duma-app)
 EnvironmentFile=/etc/cityduma/cityduma.env
-ExecStart=/opt/cityduma/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+ExecStart=/opt/cityduma/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT} --workers 2 --no-access-log
 
-Restart=always
+# автоматический перезапуск после аварийного завершения
+Restart=on-failure
 RestartSec=5s
+# корректная остановка: SIGTERM, 20 с на завершение запросов, затем SIGKILL
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# ограничения процесса: код только для чтения, нет повышения привилегий
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0027
 
 [Install]
 WantedBy=multi-user.target

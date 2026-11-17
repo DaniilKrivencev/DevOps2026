@@ -1,350 +1,151 @@
-# Лабораторная работа №2: Развертывание приложения в Linux-среде
-## Полный технический отчет, архитектура и руководство по эксплуатации
+# Лабораторная работа №2: Развёртывание приложения в Linux-среде
 
----
+Приложение «Городская Дума» развёрнуто **без контейнеров** на двух Linux-машинах
+без графического интерфейса (Ubuntu Server 24.04 LTS — Debian-подобная ОС):
 
-## 1. Введение и цели работы
-
-**Цель работы:** Переход от контейнерной среды и запуска из IDE к промышленному развертыванию распределенного веб-приложения непосредственно в операционной системе Linux (Debian-like, без GUI) в виде управляемой системной службы.
-
-### Ключевые требования задания:
-1. Создание двух Linux-машин без графического интерфейса: **сервер приложения** и **сервер базы данных**.
-2. Настройка статической адресации, внутренней сети и SSH-доступа по ключам.
-3. Запрет удаленного входа под `root`, разделение ролей пользователей (администратор и изолированный системный пользователь приложения).
-4. Разграничение прав на файловую систему (принцип наименьших привилегий).
-5. Развертывание СУБД PostgreSQL 16 и среды Python без использования контейнеров.
-6. Ограничение прав пользователя БД и сетевая изоляция СУБД.
-7. Оформление приложения как службы `systemd` с автоматическим запуском и восстановлением после сбоев.
-8. Настройка межсетевого экрана (Firewall) на обоих узлах.
-9. Изоляция конфигурации и секретов отдельно от исходного кода.
-10. Подготовка скриптов автоматизации повторного развертывания.
-
----
-
-## 2. Стек технологий
-
-| Компонент / Слой | Технология | Обоснование / Роль |
+| Машина | Адрес (статический) | Назначение |
 |---|---|---|
-| **Гипервизор** | Oracle VirtualBox 7.2 | Виртуализация изолированных Linux-узлов на хост-машине |
-| **ОС серверов** | Ubuntu Server LTS (без GUI) | Debian-like ОС, соответствующая требованиям задания |
-| **Сетевой стек ОС** | Netplan + systemd-networkd | Декларативная конфигурация статических IP-адресов |
-| **Удаленный доступ** | OpenSSH Server (аутентификация по ключам Ed25519) | Безопасное администрирование без передачи паролей |
-| **СУБД** | PostgreSQL 16 | Реляционная база данных для хранения сущностей приложения |
-| **Язык и среда** | Python 3 + `venv` (виртуальное окружение) | Изоляция зависимостей приложения от системного Python |
-| **Бэкенд-фреймворк** | FastAPI + Starlette + Pydantic v2 | Асинхронный REST API и валидация данных |
-| **ASGI веб-сервер** | Uvicorn (мультипроцессный запуск, 2 workers) | Высокопроизводительный сервер для обработки HTTP-запросов |
-| **ORM и миграции** | SQLAlchemy 2.0 (asyncio + asyncpg) + Alembic | Асинхронная работа с БД и управление версиями схемы данных |
-| **Фронтенд / UI** | Jinja2 + HTML5 / CSS3 / Bootstrap 5 | Серверный рендеринг веб-интерфейса и модальных окон |
-| **Инициализация и супервизор** | Linux systemd | Управление жизненным циклом службы (`cityduma.service`), автостарт, мониторинг падений |
-| **Межсетевой экран** | UFW (Uncomplicated Firewall) / iptables | Фильтрация входящего сетевого трафика на уровне ядра Linux |
+| `cityduma-app` | `172.27.206.10/24` | приложение (Python 3 + venv, systemd-служба `cityduma`) |
+| `cityduma-db`  | `172.27.206.20/24` | PostgreSQL 16 |
+
+Всё развёртывание воспроизводится одной командой `vagrant up` или скриптами
+из каталога [`deploy/`](../deploy) на любых двух чистых Debian/Ubuntu-машинах.
 
 ---
 
-## 3. Сетевая топология и архитектура стенда
+## 1. Быстрый старт
 
-В стенде задействованы **две виртуальные сетевые карты** на каждой машине:
-* **Адаптер 1 (NAT):** Выход в интернет для обновления системы и загрузки пакетов (`apt`, `pip`). На этом адаптере настроен проброс портов (Port Forwarding) на хост-машину Windows.
-* **Адаптер 2 (Host-Only Network `172.27.206.0/24`):** Внутренняя статическая сеть для прямого взаимодействия серверов между собой без выхода наружу.
+```bash
+vagrant up                 # создаёт db, затем app; при первом запуске генерирует deploy/secrets.env
+vagrant ssh app            # или: ssh -p 2221 duma-admin@127.0.0.1
+curl http://localhost:8000/health
+cat deploy/secrets.env     # пароли admin/secretary для входа в веб-интерфейс
+```
+
+Без Vagrant (две готовые ВМ, команды от администратора):
+
+```bash
+# на сервере БД
+export DB_OWNER_PASS=... DB_APP_PASS=... APP_SERVER_IP=172.27.206.10
+sudo -E bash deploy/deploy_db.sh
+# на сервере приложения
+export DB_OWNER_PASS=... DB_APP_PASS=... ADMIN_PASSWORD=... SECRETARY_PASSWORD=... DB_SERVER_IP=172.27.206.20
+sudo -E bash deploy/deploy_app.sh
+```
+
+Повторный запуск `deploy_app.sh` = обновление версии (код, зависимости, миграции, перезапуск).
+
+## 2. Сетевая схема
 
 ```text
-                     Клиент (Хост-машина Windows)
-                        │ Браузер: http://localhost:8000
-                        │ SSH:     ssh -p 2221 b0ndik@localhost
-                        │ SSH:     ssh -p 2220 b0ndik@localhost
-                        ▼
-═════════════════ VirtualBox NAT Engine (Port Forwarding) ═════════════════
-         │                                               │
-         │ Порт 2221 → 22 (SSH)                          │ Порт 2220 → 22 (SSH)
-         │ Порт 8000 → 8000 (HTTP)                       │
-         ▼                                               ▼
-┌──────────────────────────────────────┐  ┌──────────────────────────────────────┐
-│  Сервер Приложения (app-server)      │  │  Сервер Базы Данных (db-server)      │
-│  Имя хоста: app                      │  │  Имя хоста: database                 │
-├──────────────────────────────────────┤  ├──────────────────────────────────────┤
-│ Сеть:                                │  │ Сеть:                                │
-│ • enp0s3 (NAT): 10.0.2.15            │  │ • enp0s3 (NAT): 10.0.2.15            │
-│ • enp0s8 (Static): 172.27.206.10/24  │  │ • enp0s8 (Static): 172.27.206.20/24  │
-├──────────────────────────────────────┤  ├──────────────────────────────────────┤
-│ Пользователи:                        │  │ Пользователи:                        │
-│ • b0ndik (sudo-администратор)        │  │ • b0ndik (sudo-администратор)        │
-│ • duma-app (системный, nologin)      │  │ • postgres (системный владелец СУБД) │
-├──────────────────────────────────────┤  ├──────────────────────────────────────┤
-│ Файловая система:                    │  │ СУБД PostgreSQL 16:                 │
-│ • /opt/cityduma (код приложения)     │  │ • База данных: city_duma             │
-│ • /opt/cityduma/venv (Python venv)   │  │ • Пользователь: duma_user            │
-│ • /etc/cityduma/cityduma.env (секреты│  │ • Права: только на city_duma         │
-├──────────────────────────────────────┤  ├──────────────────────────────────────┤
-│ Служба systemd:                      │  │ Конфигурация доступа:                │
-│ • cityduma.service (User=duma-app)   │  │ • postgresql.conf: listen_addr = '*' │
-│ • Restart=always (5 сек)             │  │ • pg_hba.conf: разрешен вход ТОЛЬКО  │
-├──────────────────────────────────────┤  │   с 172.27.206.10/32 по scram-sha-256│
-│ UFW Firewall:                        │  ├──────────────────────────────────────┤
-│ • 22/tcp   — ALLOW Anywhere          │  │ UFW Firewall:                        │
-│ • 8000/tcp — ALLOW Anywhere          │  │ • 22/tcp   — ALLOW Anywhere          │
-│ • DEFAULT  — DENY INCOMING           │  │ • 5432/tcp — ALLOW 172.27.206.10 ONLY│
-└──────────────────┬───────────────────┘  │ • DEFAULT  — DENY INCOMING           │
-                   │                      └──────────────────▲───────────────────┘
-                   │  PostgreSQL TCP :5432 (asyncpg)         │
-                   └─────────────────────────────────────────┘
+              Клиент (хост Windows/Linux)
+                 │ http://localhost:8000          (проброс 8000 → app:8000)
+                 │ ssh -p 2221 / -p 2220          (проброс → app:22 / db:22)
+═════════════ VirtualBox NAT (enp0s3) ══════════════════════════════════
+        │                                         │
+┌───────▼──────────────────────────┐   ┌──────────▼───────────────────────┐
+│ cityduma-app  172.27.206.10      │   │ cityduma-db   172.27.206.20      │
+│ users: duma-admin (sudo, ключ)   │   │ users: duma-admin (sudo, ключ)   │
+│        duma-app (nologin)        │   │        postgres                  │
+│ /opt/cityduma  root:duma-app 750 │   │ БД city_duma                     │
+│ /etc/cityduma  root:duma-app 750 │   │   duma_owner — владелец/миграции │
+│ cityduma.service User=duma-app   │   │   duma_app   — только DML        │
+│ iptables: 22, 8000; иначе DROP   │   │ iptables: 22; 5432 только с .10  │
+└───────────────┬──────────────────┘   └──────────▲───────────────────────┘
+                │   PostgreSQL :5432 (enp0s8, внутренняя сеть 172.27.206.0/24)
+                └─────────────────────────────────┘
 ```
 
----
+## 3. Выполнение требований
 
-## 4. Подробный разбор выполненных настроек по требованиям
+| № | Требование | Как выполнено | Где |
+|---|---|---|---|
+| 1 | Две Debian-подобные ВМ без GUI | `bento/ubuntu-24.04` (server, без GUI), app + db | `Vagrantfile` |
+| 2 | Сеть, постоянная адресация, SSH по ключам | `private_network` со статическими IP (netplan внутри ВМ), вход только по ключу (`PasswordAuthentication no`) | `Vagrantfile`, `deploy/harden_ssh.sh` |
+| 3 | Запрет root, отдельные пользователи | `PermitRootLogin no`; администратор `duma-admin` (sudo, пароль заблокирован, вход по ключу); приложение — системный `duma-app` (`nologin`, без домашнего каталога) | `deploy/harden_ssh.sh`, `deploy/deploy_app.sh` |
+| 4 | Права на файлы и каталоги | код и venv — `root:duma-app`, каталоги 750, файлы 640: приложение читает, но не может изменить свой код; `/etc/cityduma` 750, `cityduma.env` 640 | `deploy/deploy_app.sh` |
+| 5 | Среда выполнения и СУБД | Python 3 + venv, зависимости строго из `requirements.txt` (зафиксированные версии); PostgreSQL 16 | `deploy/deploy_*.sh` |
+| 6 | БД и пользователь с минимальными правами | `duma_owner` — владелец схемы, используется только для миграций (пароль не сохраняется на сервере приложения); `duma_app` — только `SELECT/INSERT/UPDATE/DELETE` и последовательности, без `CREATE`; `pg_hba.conf` — только с `172.27.206.10`, `scram-sha-256`; PostgreSQL слушает только `localhost` и внутренний адрес | `deploy/deploy_db.sh` |
+| 7 | Без контейнеров | uvicorn из venv | `deploy/deploy_app.sh` |
+| 8 | systemd-служба: запуск/остановка/перезапуск/автостарт | `cityduma.service`, `systemctl enable` | `deploy/cityduma.service` |
+| 9 | Перезапуск после аварии | `Restart=on-failure`, `RestartSec=5s`, ограничение `StartLimitBurst=5` за 120 с | `deploy/cityduma.service` |
+| 10 | Firewall на **iptables** | политика `INPUT DROP`; app — 22 и 8000; db — 22 и 5432 только с `172.27.206.10` (остальные попытки — `LOG` с префиксом `DB-DENY`); правила сохраняются `netfilter-persistent` | `deploy/firewall.sh` |
+| 11 | Настройки отдельно от кода | `/etc/cityduma/cityduma.env` → `EnvironmentFile=`; в репозитории только шаблон | `deploy/cityduma.env.template` |
+| 12 | Скрипты повторения развёртывания | идемпотентные `deploy_db.sh`, `deploy_app.sh`, `harden_ssh.sh`, `firewall.sh` | `deploy/` |
+| 13 | Не root, нет лишних портов, нет паролей в репозитории | `User=duma-app` + `NoNewPrivileges`, `ProtectSystem=strict`; открыты только 22/8000 и 22/5432(app); пароли — переменные окружения, `deploy/secrets.env` генерируется локально и в `.gitignore`, gitleaks в CI | см. раздел 4 |
 
-### Требование 1 & 2: Сеть, статические IP и SSH-доступ по ключам
-* **Конфигурация Netplan (`/etc/netplan/00-installer-config.yaml`):**
-  * `db-server`: интерфейс `enp0s8` зафиксирован на `172.27.206.20/24`.
-  * `app-server`: интерфейс `enp0s8` зафиксирован на `172.27.206.10/24`.
-* **SSH-ключи:**
-  * На хосте Windows сгенерирован ключ `ssh-ed25519`.
-  * Публичный ключ помещен в `~/.ssh/authorized_keys` пользователя `b0ndik` на обоих серверах.
-  * Установлены строгие права: `chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys`.
-  * Аутентификация выполняется мгновенно без ввода пароля.
+## 4. Зафиксированные требования безопасности
 
-### Требование 3: Запрет входа под root и разделение пользователей
-* В файле `/etc/ssh/sshd_config` на обеих ВМ установлено:
-  ```ini
-  PermitRootLogin no
-  PubkeyAuthentication yes
-  ```
-* Пользователь `b0ndik` используется исключительно для администрирования через `sudo`.
-* На `app-server` создан специализированный системный пользователь:
-  ```bash
-  sudo useradd --system --no-create-home --shell /usr/sbin/nologin duma-app
-  ```
-  Пользователь `duma-app` не имеет интерактивного шелла, не может залогиниться в систему и не имеет прав суперпользователя.
+1. **Приложение не запускается от root**: `User=duma-app`, `NoNewPrivileges=yes`; проверка — `ps -o user= -C uvicorn` → `duma-app`.
+2. **Лишние порты не открыты**: `sudo iptables -L INPUT -n -v` — политика `DROP`, разрешены только порты роли; `ss -tlnp` на db показывает 5432 только на `127.0.0.1` и `172.27.206.20`.
+3. **Пароли не хранятся в репозитории**: скрипты требуют `DB_OWNER_PASS`, `DB_APP_PASS`, `ADMIN_PASSWORD`, `SECRETARY_PASSWORD` из окружения и завершаются с ошибкой, если их нет; `deploy/secrets.env` — в `.gitignore`; шаблоны содержат только заглушки.
+4. **Вход по SSH только по ключам**, root запрещён: `sudo sshd -T | grep -E 'permitrootlogin|passwordauthentication'`.
 
-### Требование 4 & 11: Права на файлы и изоляция настроек
-* **Каталог приложения:** `/opt/cityduma`
-  * Владелец: `duma-app:duma-app`
-  * Права: `755` (только чтение/выполнение для процесса, запись ограничена).
-* **Секреты и конфигурация:** `/etc/cityduma/cityduma.env`
-  * Каталог `/etc/cityduma`: права `750`, владелец `root:duma-app`.
-  * Файл `cityduma.env`: права `640`, владелец `root:duma-app`.
-  * Обычные пользователи системы не имеют права даже прочитать содержимое файла с паролями.
-  * Переменные окружения (`DATABASE_URL`, `SECRET_KEY`, `APP_ENV`) передаются в службу через директиву systemd `EnvironmentFile` и не хранятся в репозитории git.
+## 5. Проверка на защите
 
-### Требование 5 & 6: СУБД PostgreSQL и разграничение прав
-* База данных слушает порт `5432` на всех адресах (`listen_addresses = '*'`), но доступ строго фильтруется на двух эшелонах:
-  1. **На уровне СУБД (`pg_hba.conf`):**
-     ```text
-     host    city_duma       duma_user       172.27.206.10/32        scram-sha-256
-     ```
-     Подключение разрешено **только** к базе `city_duma`, **только** пользователю `duma_user` и **только** с IP-адреса `172.27.206.10`.
-  2. **На уровне прав PostgreSQL:** Пользователь `duma_user` не является суперпользователем (`SUPERUSER = false`, `CREATEDB = false`), права выданы исключительно на таблицы и последовательности схемы `public` базы `city_duma`.
-
-### Требование 7, 8 & 9: Служба systemd и автоматический перезапуск
-Создан unit-файл `/etc/systemd/system/cityduma.service`:
-```ini
-[Unit]
-Description=City Duma Management System (FastAPI)
-After=network.target
-
-[Service]
-Type=simple
-User=duma-app
-Group=duma-app
-WorkingDirectory=/opt/cityduma
-
-EnvironmentFile=/etc/cityduma/cityduma.env
-ExecStart=/opt/cityduma/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
-
-Restart=always
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-```
-* **Автостарт:** Служба зарегистрирована в автозагрузке ОС командой `systemctl enable cityduma`.
-* **Самовосстановление:** Параметр `Restart=always` с задержкой `RestartSec=5s` обеспечивает гарантированный перезапуск Uvicorn при аварийном завершении (`kill -9`, segmentation fault или падение процесса).
-
-### Требование 10: Межсетевой экран (UFW Firewall)
-* **На сервере БД (`db-server`):**
-  * По умолчанию весь входящий трафик запрещен (`default deny incoming`).
-  * Разрешен SSH: порт `22/tcp`.
-  * Порт СУБД `5432/tcp` открыт **строго** с IP `172.27.206.10`. Любые попытки сканирования или подключения с хоста или сторонних узлов отбрасываются.
-* **На сервере приложений (`app-server`):**
-  * По умолчанию входящий трафик запрещен (`default deny incoming`).
-  * Разрешен SSH: порт `22/tcp`.
-  * Разрешен HTTP API/UI: порт `8000/tcp` для клиентов.
-
----
-
-## 5. Как подключаться к виртуальным машинам и редактировать файлы
-
-Для удобной работы с виртуальными машинами с хост-машины Windows настроены три способа.
-
-### Способ 1: Прямое подключение по SSH из терминала Windows (PowerShell / CMD)
-
-Благодаря настроенным портам VirtualBox и SSH-ключам, вы можете мгновенно подключиться к любой машине одной командой без ввода пароля:
-
-* **Подключение к Серверу Приложения:**
-  ```powershell
-  ssh -p 2221 b0ndik@localhost
-  ```
-* **Подключение к Серверу Базы Данных:**
-  ```powershell
-  ssh -p 2220 b0ndik@localhost
-  ```
-
----
-
-### Способ 2: Редактирование кода через VS Code (Remote - SSH) — Самый удобный
-
-Вы можете открыть каталог `/opt/cityduma` на виртуальной машине прямо в редакторе VS Code на Windows, как будто это локальная папка:
-
-1. В VS Code установите расширение **Remote - SSH** (от Microsoft).
-2. Нажмите `F1` (или `Ctrl + Shift + P`) → введите `Remote-SSH: Open SSH Configuration File` → выберите файл `C:\Users\<Ваш_Пользователь>\.ssh\config`.
-3. Добавьте в него две записи:
-   ```sshconfig
-   Host cityduma-app
-       HostName localhost
-       Port 2221
-       User b0ndik
-       IdentityFile ~/.ssh/id_ed25519
-
-   Host cityduma-db
-       HostName localhost
-       Port 2220
-       User b0ndik
-       IdentityFile ~/.ssh/id_ed25519
-   ```
-4. Нажмите `F1` → `Remote-SSH: Connect to Host...` → выберите **`cityduma-app`**.
-5. Откроется окно VS Code, подключенное внутрь Linux. Нажмите **File → Open Folder** и выберите `/opt/cityduma`.
-6. Вы можете редактировать любые файлы в графическом интерфейсе!
-   * *Примечание:* После изменения файлов на сервере перезапустите службу:
-     ```bash
-     sudo systemctl restart cityduma
-     ```
-
----
-
-### Способ 3: Редактирование на сервере через терминал (nano / vim)
-
-Если вы подключились по SSH через консоль:
-1. Отредактируйте нужный файл:
-   ```bash
-   sudo nano /opt/cityduma/app/main.py
-   # или файл конфигурации:
-   sudo nano /etc/cityduma/cityduma.env
-   ```
-2. Сохраните изменения (`Ctrl + O`, затем `Enter`, выход `Ctrl + X`).
-3. Примените изменения перезапуском службы:
-   ```bash
-   sudo systemctl restart cityduma
-   ```
-4. Посмотрите свежие логи работы службы:
-   ```bash
-   sudo journalctl -u cityduma -f
-   ```
-
----
-
-### Способ 4: Быстрая синхронизация файлов с Windows на сервер (SCP)
-
-Если вы внесли изменения в репозитории на диске `Q:\DevOps2026` и хотите залить обновленный файл на сервер:
-```powershell
-# Из папки Q:\DevOps2026 на хосте Windows:
-scp -P 2221 app/main.py b0ndik@localhost:/tmp/main.py
-ssh -p 2221 b0ndik@localhost "echo 1234 | sudo -S cp /tmp/main.py /opt/cityduma/app/main.py && sudo chown duma-app:duma-app /opt/cityduma/app/main.py && sudo systemctl restart cityduma"
-```
-
----
-
-## 6. Чек-лист для успешной защиты лабораторной работы
-
-Преподаватель проверяет выполнение работы по 5 обязательным сценариям. Ниже приведены точные команды для демонстрации каждого:
-
-### Проверка 1: Перезагрузка обеих машин и проверка автозапуска
+### 5.1 Перезагрузка обеих машин и автозапуск
 ```bash
-# 1. Отправляем обе ВМ в перезагрузку:
-# На db-server:  sudo reboot
-# На app-server: sudo reboot
-
-# 2. После загрузки подключаемся и проверяем статус:
-sudo systemctl status postgresql   # на db-server: Active: active (running)
-sudo systemctl status cityduma     # на app-server: Active: active (running)
-
-# 3. Проверяем отклик в браузере или через curl:
-curl http://localhost:8000/health
-# Ответ: {"status":"ok","database":"ok","version":"0.1.0"}
+vagrant reload             # или sudo reboot на каждой ВМ
+# db:
+systemctl is-enabled postgresql && systemctl is-active postgresql
+sudo iptables -L INPUT -n | head -3          # правила восстановлены после перезагрузки
+# app:
+systemctl is-enabled cityduma && systemctl is-active cityduma
+curl -s http://127.0.0.1:8000/health         # {"status":"ok","database":"ok",...}
 ```
 
-### Проверка 2: Остановка БД и диагностика состояния приложения
+### 5.2 Остановка БД и диагностика приложения
 ```bash
-# 1. На сервере БД останавливаем сервис:
+# db:
 sudo systemctl stop postgresql
-
-# 2. На сервере приложения проверяем статус healthcheck:
-curl -i http://127.0.0.1:8000/health
-# Возвращается HTTP 200 с диагностикой: {"status":"ok","database":"error: ..."}
-
-# 3. Демонстрируем журнал приложения:
-sudo journalctl -u cityduma -n 20 --no-pager
-
-# 4. Возобновляем работу БД:
-sudo systemctl start postgresql   # на db-server
-curl http://localhost:8000/health # снова "database":"ok"
+# app:
+curl -s http://127.0.0.1:8000/health          # "database":"error: ..." — приложение живо, БД недоступна
+sudo journalctl -u cityduma -n 20 --no-pager  # ERROR cityduma: health: database unavailable: ...
+nc -zv 172.27.206.20 5432                     # Connection refused
+# db:
+sudo systemctl start postgresql               # app снова "database":"ok"
 ```
 
-### Проверка 3: Поиск процесса, порта и журналов средствами Linux
+### 5.3 Процесс, порт и журналы средствами Linux
 ```bash
-# 1. Поиск процесса приложения (показываем, что он запущен от пользователя duma-app, а не root):
-ps aux | grep uvicorn
-
-# 2. Проверка прослушиваемого сетевого порта:
-ss -tulpn | grep 8000
-# или
-sudo lsof -i :8000
-
-# 3. Просмотр системных журналов службы:
-sudo journalctl -u cityduma -n 30 --no-pager
+systemctl status cityduma --no-pager          # PID, Main PID, состояние
+ps -o pid,user,cmd -C uvicorn                 # пользователь duma-app
+sudo ss -tlnp | grep 8000                     # порт и процесс
+sudo journalctl -u cityduma -f                # журнал службы (каждый запрос: метод, путь, код)
+# аварийное завершение → автоматический перезапуск:
+sudo kill -9 "$(systemctl show -p MainPID --value cityduma)"; sleep 6; systemctl is-active cityduma
 ```
 
-### Проверка 4: Изменение одного параметра службы с последующим восстановлением
+### 5.4 Изменение параметра службы и восстановление
 ```bash
-# 1. Меняем порт запуска приложения с 8000 на 8080:
-sudo sed -i 's/--port 8000/--port 8080/' /etc/systemd/system/cityduma.service
-
-# 2. Применяем конфигурацию systemd и перезапускаем службу:
-sudo systemctl daemon-reload
+sudo systemctl edit cityduma        # добавить в override:  [Service]  Environment=LOG_LEVEL=DEBUG
 sudo systemctl restart cityduma
-
-# 3. Показываем преподавателю, что порт изменился:
-ss -tulpn | grep 8080
-curl http://localhost:8080/health
-
-# 4. Возвращаем исходный порт 8000:
-sudo sed -i 's/--port 8080/--port 8000/' /etc/systemd/system/cityduma.service
-sudo systemctl daemon-reload
-sudo systemctl restart cityduma
-ss -tulpn | grep 8000
+systemctl show cityduma -p Environment
+sudo journalctl -u cityduma -n 5    # появились DEBUG-сообщения
+sudo systemctl revert cityduma && sudo systemctl restart cityduma   # возврат к исходному unit-файлу
 ```
 
-### Проверка 5: Проверка сетевой недоступности БД с постороннего узла
-```powershell
-# 1. С хост-машины Windows (посторонний узел) проверяем доступ к порту PostgreSQL:
-Test-NetConnection -ComputerName 172.27.206.20 -Port 5432
-# Результат: TcpTestSucceeded : False (пакеты отбрасываются firewall UFW)
-
-# 2. С сервера приложений (доверенный узел 172.27.206.10):
-# На app-server:
-nc -zv 172.27.206.20 5432
-# Результат: Connection to 172.27.206.20 5432 port [tcp/postgresql] succeeded!
-
-# 3. Показываем правила UFW на сервере БД:
-sudo ufw status verbose
-# To: 5432/tcp  Action: ALLOW IN  From: 172.27.206.10
+### 5.5 Недоступность БД с постороннего узла
+```bash
+# с хоста (посторонний узел):
+nc -zv -w 3 172.27.206.20 5432       # timeout (PowerShell: Test-NetConnection 172.27.206.20 -Port 5432 → False)
+# на db: попытка видна в журнале ядра
+sudo journalctl -k | grep DB-DENY | tail -1
+sudo iptables -L INPUT -n -v --line-numbers
+# с app (доверенный узел):
+nc -zv 172.27.206.20 5432            # succeeded
 ```
 
----
+## 6. Файлы
 
-## 7. Файлы автоматизации в репозитории
-
-В каталоге [`deploy/`](./deploy) сохранены все скрипты, позволяющие полностью воспроизвести стенд на любых двух чистых Debian/Ubuntu машинах:
-* [`deploy/deploy_db.sh`](./deploy/deploy_db.sh) — скрипт автоматической настройки сервера СУБД.
-* [`deploy/deploy_app.sh`](./deploy/deploy_app.sh) — скрипт автоматической сборки окружения и службы приложения.
-* [`deploy/cityduma.service`](./deploy/cityduma.service) — unit-файл службы systemd.
-* [`deploy/cityduma.env.template`](./deploy/cityduma.env.template) — шаблон файла переменных окружения.
-* [`deploy/DEFENSE_CHECKLIST.md`](./deploy/DEFENSE_CHECKLIST.md) — краткая выжимка для быстрой шпаргалки во время сдачи.
+| Файл | Назначение |
+|---|---|
+| [`Vagrantfile`](../Vagrantfile) | две ВМ, статические адреса, генерация `deploy/secrets.env`, запуск скриптов |
+| [`deploy/harden_ssh.sh`](../deploy/harden_ssh.sh) | администратор `duma-admin`, SSH только по ключам, запрет root |
+| [`deploy/firewall.sh`](../deploy/firewall.sh) | правила iptables для ролей `app` / `db` + сохранение |
+| [`deploy/deploy_db.sh`](../deploy/deploy_db.sh) | PostgreSQL, роли `duma_owner` / `duma_app`, `pg_hba.conf` |
+| [`deploy/deploy_app.sh`](../deploy/deploy_app.sh) | пользователь, код, venv, конфигурация, миграции, служба, проверка `/health` |
+| [`deploy/cityduma.service`](../deploy/cityduma.service) | unit-файл systemd |
+| [`deploy/cityduma.env.template`](../deploy/cityduma.env.template) | шаблон конфигурации службы (без значений) |
+| [`deploy/secrets.env.example`](../deploy/secrets.env.example) | список секретов развёртывания (без значений) |
+| [`deploy/checklist.md`](../deploy/checklist.md) | краткая шпаргалка для защиты |

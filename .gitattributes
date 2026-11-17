@@ -1,0 +1,6 @@
+# Единые окончания строк LF: скрипты и конфиги работают в Linux-ВМ и контейнерах,
+# даже если репозиторий клонирован в Windows (core.autocrlf=true).
+* text=auto eol=lf
+*.docx binary
+*.png binary
+*.jpg binary
