@@ -39,13 +39,14 @@
 
 ---
 
-## Быстрый старт (локально)
+## Быстрый старт
 
 ```bash
-./setup.sh          # или make setup: venv, зависимости, .env, миграции, make verify
+./setup.sh          # Linux/macOS/Git Bash: venv, зависимости, .env, миграции, make verify
 make run            # http://localhost:8000  (Swagger: /docs, health: /health)
-make verify         # весь обязательный набор проверок
 ```
+
+Windows (PowerShell): `py -3.12 -m venv .venv; .venv\Scripts\pip install -r requirements-dev.txt -c requirements.lock; Copy-Item .env.example .env; .venv\Scripts\uvicorn app.main:app --reload`
 
 ## Команды
 
