@@ -9,7 +9,7 @@
 | `cityduma-db`  | `172.27.206.20/24` | PostgreSQL 16 |
 
 Всё развёртывание воспроизводится одной командой `vagrant up` или скриптами
-из каталога [`deploy/`](../deploy) на любых двух чистых Debian/Ubuntu-машинах.
+из каталога [`deploy/`](../../deploy) на любых двух чистых Debian/Ubuntu-машинах.
 
 ---
 
@@ -140,12 +140,12 @@ nc -zv 172.27.206.20 5432            # succeeded
 
 | Файл | Назначение |
 |---|---|
-| [`Vagrantfile`](../Vagrantfile) | две ВМ, статические адреса, генерация `deploy/secrets.env`, запуск скриптов |
-| [`deploy/harden_ssh.sh`](../deploy/harden_ssh.sh) | администратор `duma-admin`, SSH только по ключам, запрет root |
-| [`deploy/firewall.sh`](../deploy/firewall.sh) | правила iptables для ролей `app` / `db` + сохранение |
-| [`deploy/deploy_db.sh`](../deploy/deploy_db.sh) | PostgreSQL, роли `duma_owner` / `duma_app`, `pg_hba.conf` |
-| [`deploy/deploy_app.sh`](../deploy/deploy_app.sh) | пользователь, код, venv, конфигурация, миграции, служба, проверка `/health` |
-| [`deploy/cityduma.service`](../deploy/cityduma.service) | unit-файл systemd |
-| [`deploy/cityduma.env.template`](../deploy/cityduma.env.template) | шаблон конфигурации службы (без значений) |
-| [`deploy/secrets.env.example`](../deploy/secrets.env.example) | список секретов развёртывания (без значений) |
-| [`deploy/checklist.md`](../deploy/checklist.md) | краткая шпаргалка для защиты |
+| [`Vagrantfile`](../../Vagrantfile) | две ВМ, статические адреса, генерация `deploy/secrets.env`, запуск скриптов |
+| [`deploy/harden_ssh.sh`](../../deploy/harden_ssh.sh) | администратор `duma-admin`, SSH только по ключам, запрет root |
+| [`deploy/firewall.sh`](../../deploy/firewall.sh) | правила iptables для ролей `app` / `db` + сохранение |
+| [`deploy/deploy_db.sh`](../../deploy/deploy_db.sh) | PostgreSQL, роли `duma_owner` / `duma_app`, `pg_hba.conf` |
+| [`deploy/deploy_app.sh`](../../deploy/deploy_app.sh) | пользователь, код, venv, конфигурация, миграции, служба, проверка `/health` |
+| [`deploy/cityduma.service`](../../deploy/cityduma.service) | unit-файл systemd |
+| [`deploy/cityduma.env.template`](../../deploy/cityduma.env.template) | шаблон конфигурации службы (без значений) |
+| [`deploy/secrets.env.example`](../../deploy/secrets.env.example) | список секретов развёртывания (без значений) |
+| [`checklist.md`](checklist.md) | краткая шпаргалка для защиты |

@@ -20,13 +20,13 @@
 
 | Файл | Назначение |
 |---|---|
-| [`Dockerfile`](../Dockerfile) | двухэтапная сборка, `python:3.12.16-slim-trixie`, пользователь `app` (10001), HEALTHCHECK, STOPSIGNAL |
-| [`.dockerignore`](../.dockerignore) | «запретить всё, разрешить нужное»: в контекст попадают только `app/`, `alembic/`, `scripts/`, `requirements.txt` |
-| [`docker-compose.yml`](../docker-compose.yml) | db, migrate, app1, app2, nginx; сети, volume, healthcheck, порядок запуска, лимиты |
-| [`nginx/nginx.conf`](../nginx/nginx.conf) | upstream из двух экземпляров, `max_fails`, `proxy_next_upstream`, `limit_req` |
-| [`scripts/container_policy.py`](../scripts/container_policy.py) | запреты (latest, root, секреты, healthcheck, порты) — `make container-lint` |
-| [`scripts/container_check.sh`](../scripts/container_check.sh) | полная проверка — `make container-check` |
-| [`deploy/install_docker.sh`](../deploy/install_docker.sh) | Docker Engine на Linux-ВМ (`vagrant up docker`) |
+| [`Dockerfile`](../../Dockerfile) | двухэтапная сборка, `python:3.12.16-slim-trixie`, пользователь `app` (10001), HEALTHCHECK, STOPSIGNAL |
+| [`.dockerignore`](../../.dockerignore) | «запретить всё, разрешить нужное»: в контекст попадают только `app/`, `alembic/`, `scripts/`, `requirements.txt` |
+| [`docker-compose.yml`](../../docker-compose.yml) | db, migrate, app1, app2, nginx; сети, volume, healthcheck, порядок запуска, лимиты |
+| [`nginx/nginx.conf`](../../nginx/nginx.conf) | upstream из двух экземпляров, `max_fails`, `proxy_next_upstream`, `limit_req` |
+| [`scripts/container_policy.py`](../../scripts/container_policy.py) | запреты (latest, root, секреты, healthcheck, порты) — `make container-lint` |
+| [`scripts/container_check.sh`](../../scripts/container_check.sh) | полная проверка — `make container-check` |
+| [`deploy/install_docker.sh`](../../deploy/install_docker.sh) | Docker Engine на Linux-ВМ (`vagrant up docker`) |
 
 ## 2. Быстрый старт
 
