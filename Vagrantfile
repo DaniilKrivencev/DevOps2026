@@ -33,8 +33,9 @@ pubkey_file = ["id_ed25519.pub", "id_rsa.pub"]
                 .find { |f| File.exist?(f) }
 ADMIN_ENV = pubkey_file ? { "ADMIN_PUBKEY" => File.read(pubkey_file).strip } : {}
 
-DB_IP  = "172.27.206.20"
-APP_IP = "172.27.206.10"
+DB_IP     = "172.27.206.20"
+APP_IP    = "172.27.206.10"
+DOCKER_IP = "172.27.206.30"
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-24.04"
@@ -73,5 +74,23 @@ Vagrant.configure("2") do |config|
       inline: "bash /opt/cityduma-src/deploy/deploy_app.sh",
       env: SECRETS.merge(ADMIN_ENV, "DB_SERVER_IP" => DB_IP,
                          "SRC_DIR" => "/opt/cityduma-src")
+  end
+
+  # ─── ЛР4: ВМ с Docker для контейнерного окружения ─────────────────────────
+  # Не стартует по умолчанию: vagrant up docker
+  config.vm.define "docker", autostart: false do |d|
+    d.vm.hostname = "cityduma-docker"
+    d.vm.network "private_network", ip: DOCKER_IP
+    d.vm.network "forwarded_port", guest: 22, host: 2222, id: "ssh"
+    d.vm.network "forwarded_port", guest: 8080, host: 8080, id: "nginx"
+    d.vm.provider "virtualbox" do |vb|
+      vb.name = "cityduma-docker"
+      vb.memory = 3072
+      vb.cpus = 2
+    end
+    d.vm.provision "shell",
+      inline: "bash /opt/cityduma-src/deploy/harden_ssh.sh && " \
+              "DOCKER_USERS='duma-admin vagrant' bash /opt/cityduma-src/deploy/install_docker.sh",
+      env: ADMIN_ENV
   end
 end
