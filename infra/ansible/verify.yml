@@ -1,0 +1,8 @@
+---
+# Только проверка работающего окружения, без изменений (make infra-verify).
+- name: Проверка доступности приложения и состояния узла
+  hosts: cityduma
+  become: true
+  gather_facts: false
+  roles:
+    - role: verify

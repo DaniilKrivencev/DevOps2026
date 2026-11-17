@@ -1,0 +1,37 @@
+---
+# ── ОБЩИЕ параметры всех окружений ─────────────────────────────────────────
+# Порядок приоритета (от слабого к сильному):
+#   roles/*/defaults                                   — значения ролей
+#   group_vars/all.yml                                 — ОБЩИЕ (этот файл)
+#   inventories/<окружение>/group_vars/cityduma/main.yml  — ОКРУЖЕНИЕ
+#   inventories/<окружение>/group_vars/cityduma/vault.yml — СЕКРЕТНЫЕ (ansible-vault)
+#   inventories/<окружение>/host_vars/<узел>.yml          — УЗЛОВЫЕ
+
+project_name: cityduma
+app_dir: /opt/cityduma
+app_image: ghcr.io/daniilkrivencev/devops2026
+
+# пользователи
+admin_user: duma-admin
+deploy_user: cd-deploy
+
+# сеть: публикуется только nginx
+http_port: 8080
+ssh_port: 22
+
+# PostgreSQL в контейнере
+postgres_user: duma
+postgres_db: city_duma
+
+# имя узла по умолчанию (переопределяется в host_vars)
+host_hostname: "{{ inventory_hostname }}"
+
+# значения по умолчанию для секретных параметров (реальные — в vault окружения)
+registry_username: ""
+registry_password: ""
+admin_ssh_pubkeys: []
+deploy_ssh_pubkey: ""
+
+# учётные записи приложения (пароли — только в vault)
+app_admin_login: admin
+app_secretary_login: secretary

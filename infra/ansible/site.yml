@@ -1,0 +1,25 @@
+---
+# Приведение узлов «Городской Думы» к требуемому состоянию (ЛР7).
+#   make infra-apply ENV=staging|production
+# Порядок ролей: система → пользователи → SSH → firewall → Docker → приложение → проверка.
+- name: Подготовка и настройка узлов приложения
+  hosts: cityduma
+  become: true
+  gather_facts: true
+  roles:
+    - role: base
+      tags: [base]
+    - role: users
+      tags: [users]
+    - role: ssh
+      tags: [ssh]
+    - role: firewall
+      tags: [firewall]
+    - role: docker
+      tags: [docker]
+    - role: app
+      tags: [app]
+    - role: verify
+      tags: [verify]
+      # в режиме --check ничего не запущено и не изменено — проверять нечего
+      when: not ansible_check_mode

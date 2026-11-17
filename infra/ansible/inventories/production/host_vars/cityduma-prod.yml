@@ -1,0 +1,6 @@
+---
+# ── УЗЛОВЫЕ параметры ──
+ansible_host: 172.27.206.70
+ansible_user: vagrant
+ansible_ssh_private_key_file: ~/.ssh/vagrant-infra-prod.key
+host_hostname: cityduma-prod

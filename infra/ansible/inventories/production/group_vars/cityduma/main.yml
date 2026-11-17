@@ -1,0 +1,17 @@
+---
+# ── Параметры ОКРУЖЕНИЯ production ──
+env_name: production
+app_tag: "0.6.2"
+log_level: INFO
+log_format: json
+auto_rollback: 1
+# SSH только из административной сети (внутренняя сеть стенда)
+ssh_allowed_from: 172.27.206.0/24
+
+postgres_password: "{{ vault_postgres_password }}"
+app_admin_password: "{{ vault_app_admin_password }}"
+app_secretary_password: "{{ vault_app_secretary_password }}"
+registry_username: "{{ vault_registry_username }}"
+registry_password: "{{ vault_registry_password }}"
+admin_ssh_pubkeys: "{{ vault_admin_ssh_pubkeys }}"
+deploy_ssh_pubkey: "{{ vault_deploy_ssh_pubkey }}"
