@@ -30,5 +30,6 @@
 | 4 | Контейнеризация | [lab4](lab4/README.md) | `Dockerfile`, `docker-compose.yml`, `nginx/` | `make container-check` |
 | 5 | Continuous Integration | [lab5](lab5/README.md) | `.github/workflows/ci*.yml`, `scripts/ci.sh`, `.github/CODEOWNERS` | вкладка Actions, `make ci` |
 | 6 | Continuous Delivery | [lab6](lab6/README.md) | `.github/workflows/cd.yml`, `deploy/staging/`, `scripts/cd.sh` | `make cd-deploy TAG=...` |
+| 7 | Управление конфигурацией (Ansible) | [lab7](lab7/README.md) | `infra/ansible/`, `.github/workflows/infra.yml` | `make infra-apply ENV=staging`, `make infra-test` |
 
-Версии по тегам: `git checkout v0.1.0` — состояние ЛР1, `v0.5.0` — ЛР4–5, `v0.6.0` — ЛР6.
+Версии по тегам: `git checkout v0.1.0` — состояние ЛР1, `v0.5.0` — ЛР4–5, `v0.6.0` — ЛР6, `v0.7.0` — ЛР7.
