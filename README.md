@@ -89,6 +89,7 @@ make verify         # весь обязательный набор провер�
 | 3 | Автоматические проверки, миграции, бэкапы | [docs/lab3/README_LAB3.md](docs/lab3/README_LAB3.md), `make verify` |
 | 4 | Контейнеризация и проверка окружения | [docs/LAB4_CONTAINERS.md](docs/LAB4_CONTAINERS.md), `make docker-up`, `make container-check` |
 | 5 | Continuous Integration | [docs/LAB5_CI.md](docs/LAB5_CI.md), `.github/workflows/`, `make ci` |
+| 6 | Continuous Delivery и проверка релиза | [docs/LAB6_CD.md](docs/LAB6_CD.md), `.github/workflows/cd.yml`, `make cd-deploy TAG=...`, `/version` |
 
 > История: до объединения код ЛР3 жил в каталоге `lab3/`, а в корне лежала версия ЛР1.
 > Теперь в корне — единое актуальное приложение; состояние ЛР1 доступно по тегу `v0.1.0`.
