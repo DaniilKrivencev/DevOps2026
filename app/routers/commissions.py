@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_admin
 from app.database import get_db
 from app.models import Commission, CommissionMember, Deputy
 from app.schemas import (
@@ -33,7 +34,12 @@ async def list_commissions(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
-@router.post("/", response_model=CommissionOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    dependencies=[Depends(require_admin)],
+    response_model=CommissionOut,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_commission(data: CommissionCreate, db: AsyncSession = Depends(get_db)):
     if data.chair_id is not None:
         chair = await db.get(Deputy, data.chair_id)
@@ -63,7 +69,9 @@ async def get_commission(commission_id: int, db: AsyncSession = Depends(get_db))
     return commission
 
 
-@router.patch("/{commission_id}", response_model=CommissionOut)
+@router.patch(
+    "/{commission_id}", dependencies=[Depends(require_admin)], response_model=CommissionOut
+)
 async def update_commission(
     commission_id: int, data: CommissionUpdate, db: AsyncSession = Depends(get_db)
 ):
@@ -100,7 +108,11 @@ async def update_commission(
     return commission
 
 
-@router.delete("/{commission_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{commission_id}",
+    dependencies=[Depends(require_admin)],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def delete_commission(commission_id: int, db: AsyncSession = Depends(get_db)):
     commission = await db.get(Commission, commission_id)
     if not commission:
@@ -122,6 +134,7 @@ async def list_members(commission_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post(
     "/{commission_id}/members",
+    dependencies=[Depends(require_admin)],
     response_model=CommissionMemberOut,
     status_code=status.HTTP_201_CREATED,
 )
@@ -159,6 +172,7 @@ async def add_member(
 
 @router.delete(
     "/{commission_id}/members/{deputy_id}",
+    dependencies=[Depends(require_admin)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def remove_member(commission_id: int, deputy_id: int, db: AsyncSession = Depends(get_db)):

@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import User, current_user
 from app.database import get_db
 from app.routers import agenda, attendance, commissions, deputies, sessions
 
@@ -40,6 +41,13 @@ async def health(db: AsyncSession = Depends(get_db)):
     except Exception as exc:  # health должен отвечать даже при недоступной БД
         db_status = f"error: {exc}"
     return {"status": "ok", "database": db_status, "version": APP_VERSION}
+
+
+# ─── Авторизация ──────────────────────────────────────────────────────────────
+@app.get("/api/v1/auth/me", tags=["auth"])
+async def who_am_i(user: User = Depends(current_user)):
+    """Проверка учётных данных: возвращает логин и роль текущего пользователя."""
+    return {"username": user.username, "role": user.role}
 
 
 # ─── Web UI routes ────────────────────────────────────────────────────────────

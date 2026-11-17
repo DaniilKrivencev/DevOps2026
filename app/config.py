@@ -35,3 +35,8 @@ def get_database_url() -> str:
             raise RuntimeError("DATABASE_URL must be set in production")
         return DEFAULT_DATABASE_URL
     return url
+
+
+def get_auth_users_raw() -> str:
+    """Учётные записи для HTTP Basic: 'логин:пароль:роль,...' (см. app/auth.py)."""
+    return os.getenv("AUTH_USERS", "").strip()
