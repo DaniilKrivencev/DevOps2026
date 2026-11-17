@@ -79,3 +79,25 @@ def test_healthcheck_rejects_non_http_url():
 def test_healthcheck_main_exit_code(capsys):
     assert healthcheck.main(["x", "http://127.0.0.1:1/health"]) == 1
     assert "unreachable" in capsys.readouterr().out
+
+
+async def test_version_endpoint(client, monkeypatch):
+    monkeypatch.setenv("APP_COMMIT", "0123456789abcdef")
+    monkeypatch.setenv("APP_BUILD_TIME", "2026-11-17T20:00:00Z")
+    r = await client.get("/version")
+    assert r.status_code == 200
+    assert r.json() == {
+        "version": main.APP_VERSION,
+        "commit": "0123456789abcdef",
+        "build_time": "2026-11-17T20:00:00Z",
+        "environment": "test",
+        "instance": main.INSTANCE_ID,
+    }
+
+
+async def test_version_defaults(client, monkeypatch):
+    monkeypatch.delenv("APP_COMMIT", raising=False)
+    monkeypatch.delenv("APP_BUILD_TIME", raising=False)
+    body = (await client.get("/version")).json()
+    assert body["commit"] == "unknown"
+    assert body["build_time"] == "unknown"

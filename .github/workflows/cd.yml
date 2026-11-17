@@ -1,0 +1,122 @@
+# =============================================================================
+# CD: доставка на тестовое окружение staging (ЛР6)
+#
+# Автоматически — после УСПЕШНОГО CI (а значит, после публикации образа) для push
+# в main или тега vX.Y.Z; вручную — workflow_dispatch: выпуск конкретного тега,
+# ручной возврат, проверка, статус.
+# Ограничения:
+#   - только main и теги v* (ветки feature/develop не выпускаются);
+#   - environment «staging»: в настройках репозитория можно включить ручное
+#     подтверждение (Required reviewers) — выпуск ждёт одобрения;
+#   - concurrency: одновременно идёт только одно развёртывание, остальные ждут
+#     (на сервере дополнительно flock).
+# Образ на сервере не пересобирается: сервер скачивает опубликованный тег из registry.
+# Доступ к серверу — отдельная учётная запись cd-deploy по ключу с принудительной
+# командой (deploy/staging/setup_staging.sh).
+#
+# Секреты environment staging: STAGING_SSH_KEY, STAGING_KNOWN_HOSTS.
+# Переменные: STAGING_HOST, STAGING_PORT, STAGING_URL, CD_RUNS_ON (JSON, например
+# ["self-hosted","staging"] — если staging во внутренней сети и недоступен из интернета).
+# =============================================================================
+name: CD (staging)
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Действие"
+        type: choice
+        options: [deploy, rollback, verify, status]
+        default: deploy
+      tag:
+        description: "Тег образа: sha-<commit> или X.Y.Z (для rollback пусто — предыдущая успешная версия)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-staging
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    name: "Staging: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'deploy' }}"
+    # пока окружение staging не настроено (нет переменной STAGING_HOST), автоматический
+    # выпуск пропускается, а не падает
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.STAGING_HOST != '' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       (github.event.workflow_run.head_branch == 'main' ||
+        startsWith(github.event.workflow_run.head_branch, 'v')))
+    runs-on: ${{ fromJSON(vars.CD_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 20
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    steps:
+      - name: Checkout (тот же коммит, что прошёл CI)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Что выпускаем
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_ACTION: ${{ inputs.action }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            action="$INPUT_ACTION"; tag="$INPUT_TAG"
+          else
+            action=deploy
+            case "$RUN_BRANCH" in
+              v[0-9]*) tag="${RUN_BRANCH#v}" ;;          # тег vX.Y.Z → образ X.Y.Z
+              *)       tag="sha-${RUN_SHA:0:12}" ;;     # main → образ sha-<commit>
+            esac
+          fi
+          if [ "$action" = deploy ] && [ -z "$tag" ]; then
+            echo "::error::для deploy нужен тег"; exit 2
+          fi
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "### Staging: $action ${tag}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ключ учётной записи cd-deploy
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+        run: |
+          [ -n "$SSH_KEY" ] || { echo "::error::нет секрета STAGING_SSH_KEY"; exit 3; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/cd_deploy && chmod 600 ~/.ssh/cd_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+
+      - name: scripts/cd.sh ${{ steps.plan.outputs.action }} ${{ steps.plan.outputs.tag }}
+        env:
+          STAGING_HOST: ${{ vars.STAGING_HOST }}
+          STAGING_PORT: ${{ vars.STAGING_PORT || '22' }}
+          STAGING_USER: cd-deploy
+          STAGING_SSH_KEY: ~/.ssh/cd_deploy
+          ACTION: ${{ steps.plan.outputs.action }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          STAGING_SSH_KEY="$HOME/.ssh/cd_deploy" ./scripts/cd.sh "$ACTION" $TAG 2>&1 | tee deploy.log
+          rc=${PIPESTATUS[0]}
+          {
+            echo '```'; tail -n 40 deploy.log; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: Удалить ключ
+        if: always()
+        run: rm -f ~/.ssh/cd_deploy

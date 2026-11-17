@@ -16,7 +16,7 @@ from app.logging_setup import install as install_logging
 from app.logging_setup import logger, setup_logging
 from app.routers import agenda, attendance, commissions, deputies, sessions
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 
 # Идентификатор экземпляра: при нескольких копиях за балансировщиком (ЛР4)
 # видно, какой экземпляр обработал запрос. В контейнере hostname = id контейнера.
@@ -85,6 +85,23 @@ async def health(db: AsyncSession = Depends(get_db)):
 async def who_am_i(user: User = Depends(current_user)):
     """Проверка учётных данных: возвращает логин и роль текущего пользователя."""
     return {"username": user.username, "role": user.role}
+
+
+# ─── Версия работающего релиза (ЛР6) ─────────────────────────────────────────
+@app.get("/version", tags=["system"])
+async def version():
+    """Какая версия работает: версия кода, коммит и время сборки образа.
+
+    APP_COMMIT и APP_BUILD_TIME задаются при сборке образа (Dockerfile, ARG → ENV);
+    по ним проверка после развёртывания убеждается, что запущен нужный тег.
+    """
+    return {
+        "version": APP_VERSION,
+        "commit": os.getenv("APP_COMMIT", "unknown"),
+        "build_time": os.getenv("APP_BUILD_TIME", "unknown"),
+        "environment": os.getenv("APP_ENV", "development"),
+        "instance": INSTANCE_ID,
+    }
 
 
 # ─── Web UI routes ────────────────────────────────────────────────────────────

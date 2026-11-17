@@ -36,6 +36,7 @@ ADMIN_ENV = pubkey_file ? { "ADMIN_PUBKEY" => File.read(pubkey_file).strip } : {
 DB_IP     = "172.27.206.20"
 APP_IP    = "172.27.206.10"
 DOCKER_IP = "172.27.206.30"
+STAGING_IP = "172.27.206.40"
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-24.04"
@@ -92,5 +93,26 @@ Vagrant.configure("2") do |config|
       inline: "bash /opt/cityduma-src/deploy/harden_ssh.sh && " \
               "DOCKER_USERS='duma-admin vagrant' bash /opt/cityduma-src/deploy/install_docker.sh",
       env: ADMIN_ENV
+  end
+
+  # ─── ЛР6: тестовое окружение (staging) для CD ─────────────────────────────
+  # vagrant up staging. Ключ pipeline: ssh-keygen -t ed25519 -N "" -f deploy/cd_deploy_key
+  # (файлы в .gitignore); публичная часть попадает в authorized_keys cd-deploy.
+  config.vm.define "staging", autostart: false do |st|
+    st.vm.hostname = "cityduma-staging"
+    st.vm.network "private_network", ip: STAGING_IP
+    st.vm.network "forwarded_port", guest: 22, host: 2223, id: "ssh"
+    st.vm.network "forwarded_port", guest: 8080, host: 8180, id: "nginx"
+    st.vm.provider "virtualbox" do |vb|
+      vb.name = "cityduma-staging"
+      vb.memory = 3072
+      vb.cpus = 2
+    end
+    cd_key = File.join(__dir__, "deploy", "cd_deploy_key.pub")
+    cd_env = File.exist?(cd_key) ? { "CD_PUBKEY" => File.read(cd_key).strip } : {}
+    st.vm.provision "shell",
+      inline: "bash /opt/cityduma-src/deploy/harden_ssh.sh && " \
+              "bash /opt/cityduma-src/deploy/staging/setup_staging.sh",
+      env: ADMIN_ENV.merge(cd_env)
   end
 end

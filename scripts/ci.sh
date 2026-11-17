@@ -161,6 +161,7 @@ stage_build() {
   log "сборка образа $IMAGE:$IMAGE_TAG"
   docker build --target runtime \
     --build-arg APP_VERSION="$APP_VERSION" --build-arg GIT_SHA="$SHA" \
+    --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -t "$IMAGE:$IMAGE_TAG" .
   docker save "$IMAGE:$IMAGE_TAG" | gzip -1 > "$REPORTS/image.tar.gz"
   echo "$IMAGE:$IMAGE_TAG" > "$REPORTS/image.txt"

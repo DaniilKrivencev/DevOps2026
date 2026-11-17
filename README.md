@@ -39,13 +39,24 @@
 
 ---
 
-## Быстрый старт (локально)
+## Быстрый старт
+
+**Docker (рекомендуется):**
 
 ```bash
-./setup.sh          # или make setup: venv, зависимости, .env, миграции, make verify
-make run            # http://localhost:8000  (Swagger: /docs, health: /health)
-make verify         # весь обязательный набор проверок
+cp .env.example .env    # задать POSTGRES_PASSWORD и APP_AUTH_USERS
+make docker-up          # db, migrate, app1, app2, nginx → http://localhost:8080
+make container-check    # проверка контейнерного окружения
 ```
+
+**Локально без Docker:**
+
+```bash
+./setup.sh          # Linux/macOS/Git Bash: venv, зависимости, .env, миграции, make verify
+make run            # http://localhost:8000  (Swagger: /docs, health: /health)
+```
+
+Windows (PowerShell): `py -3.12 -m venv .venv; .venv\Scripts\pip install -r requirements-dev.txt -c requirements.lock; Copy-Item .env.example .env; .venv\Scripts\uvicorn app.main:app --reload`
 
 ## Команды
 
@@ -89,6 +100,7 @@ make verify         # весь обязательный набор провер�
 | 3 | Автоматические проверки, миграции, бэкапы | [docs/lab3/README_LAB3.md](docs/lab3/README_LAB3.md), `make verify` |
 | 4 | Контейнеризация и проверка окружения | [docs/LAB4_CONTAINERS.md](docs/LAB4_CONTAINERS.md), `make docker-up`, `make container-check` |
 | 5 | Continuous Integration | [docs/LAB5_CI.md](docs/LAB5_CI.md), `.github/workflows/`, `make ci` |
+| 6 | Continuous Delivery и проверка релиза | [docs/LAB6_CD.md](docs/LAB6_CD.md), `.github/workflows/cd.yml`, `make cd-deploy TAG=...`, `/version` |
 
 > История: до объединения код ЛР3 жил в каталоге `lab3/`, а в корне лежала версия ЛР1.
 > Теперь в корне — единое актуальное приложение; состояние ЛР1 доступно по тегу `v0.1.0`.
