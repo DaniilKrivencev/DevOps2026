@@ -1,52 +1,148 @@
-version: "3.9"
+# =============================================================================
+# Контейнерное окружение «Городская Дума» (ЛР4)
+#
+#   nginx (8080, единственный опубликованный порт)
+#     └── app1, app2 (2 экземпляра приложения, сеть frontend + backend)
+#           └── db (PostgreSQL, только внутренняя сеть backend, порт не публикуется)
+#   migrate — разовый запуск миграций перед стартом приложения
+#
+# Запуск: make docker-up   (или: docker compose up -d --build --wait)
+# Настройки — переменные окружения / файл .env (шаблон .env.example).
+# Запрещено (проверяет make container-lint): тег latest, запуск от root,
+# секреты в образе, отключение healthcheck, публикация лишних портов.
+# =============================================================================
+name: cityduma
+
+x-app-image: &app-image
+  image: ${APP_IMAGE:-cityduma}:${APP_TAG:-local}
+  build:
+    context: .
+    args:
+      APP_VERSION: ${APP_VERSION:-0.0.0-dev}
+      GIT_SHA: ${GIT_SHA:-unknown}
+
+x-app-env: &app-env
+  APP_ENV: production
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?задайте POSTGRES_USER}:${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?задайте POSTGRES_DB}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FORMAT: ${LOG_FORMAT:-text}
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+x-app: &app
+  <<: [*app-image, *hardening]
+  init: true
+  restart: unless-stopped
+  environment:
+    <<: *app-env
+    AUTH_USERS: ${APP_AUTH_USERS:?задайте APP_AUTH_USERS}
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    db:
+      condition: service_healthy
+  networks: [frontend, backend]
+  expose: ["8000"]
+  healthcheck:
+    test: ["CMD", "python", "-m", "scripts.healthcheck"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+  stop_grace_period: 20s
+  deploy:
+    resources:
+      limits: {cpus: "0.50", memory: 256M, pids: 128}
+      reservations: {memory: 96M}
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:16.6-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?задайте POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?задайте POSTGRES_DB}
     volumes:
       - pg_data:/var/lib/postgresql/data
+    networks: [backend]
+    # порт 5432 НЕ публикуется: БД доступна только контейнерам сети backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
       timeout: 5s
-      retries: 5
-    ports:
-      - "5432:5432"
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+    shm_size: 128m
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: {cpus: "1.00", memory: 512M}
+        reservations: {memory: 128M}
 
   migrate:
-    build: .
-    command: alembic upgrade head
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    <<: [*app-image, *hardening]
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment: *app-env
     depends_on:
       db:
         condition: service_healthy
-    restart: "no"
+    networks: [backend]
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 256M}
 
-  app:
-    build: .
-    restart: unless-stopped
+  app1:
+    <<: *app
+    hostname: app1
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      APP_ENV: ${APP_ENV:-production}
-      SECRET_KEY: ${SECRET_KEY}
+      <<: *app-env
+      AUTH_USERS: ${APP_AUTH_USERS:?задайте APP_AUTH_USERS}
+      INSTANCE_ID: app1
+
+  app2:
+    <<: *app
+    hostname: app2
+    environment:
+      <<: *app-env
+      AUTH_USERS: ${APP_AUTH_USERS:?задайте APP_AUTH_USERS}
+      INSTANCE_ID: app2
+
+  nginx:
+    image: nginxinc/nginx-unprivileged:1.27.3-alpine
+    restart: unless-stopped
+    <<: *hardening
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "8000:8000"
+      - "${HTTP_PORT:-8080}:8080"
+    networks: [frontend]
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      db:
+      app1:
+        condition: service_healthy
+      app2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/nginx-health"]
+      interval: 10s
+      timeout: 3s
       retries: 3
+    deploy:
+      resources:
+        limits: {cpus: "0.25", memory: 64M}
+
+networks:
+  frontend: {}
+  backend:
+    # внутренняя сеть: без выхода наружу, недоступна с хоста
+    internal: true
 
 volumes:
   pg_data:
+    name: ${PG_VOLUME:-cityduma_pg_data}
