@@ -8,7 +8,7 @@ set -euo pipefail
 . /etc/os-release
 
 sudo apt-get update -q
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q ca-certificates curl gnupg make git
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q ca-certificates curl gnupg make git python3 python3-venv python3-pip
 sudo install -m 0755 -d /etc/apt/keyrings
 if [ ! -f /etc/apt/keyrings/docker.asc ]; then
   sudo curl -fsSL "https://download.docker.com/linux/${ID}/gpg" -o /etc/apt/keyrings/docker.asc

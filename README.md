@@ -3,6 +3,9 @@
 [![CI](https://github.com/DaniilKrivencev/DevOps2026/actions/workflows/ci.yml/badge.svg)](https://github.com/DaniilKrivencev/DevOps2026/actions/workflows/ci.yml)
 
 > Система учёта депутатов, комиссий, заседаний, повестки и посещаемости городской думы.
+
+**👉 Лабораторные работы: [labs/README.md](labs/README.md)** — у каждой свой каталог с инструкцией
+«как запустить и показать» и ответами на основные вопросы.
 > Сквозной проект курса DevOps: все лабораторные работы ведутся в одном репозитории.
 
 **Стек:** Python 3.12 · FastAPI · SQLAlchemy (async) · Alembic · PostgreSQL 16 · Jinja2 (веб-интерфейс)
