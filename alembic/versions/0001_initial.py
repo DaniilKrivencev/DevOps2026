@@ -4,15 +4,17 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-09-14
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0001"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -42,8 +44,18 @@ def upgrade() -> None:
     op.create_table(
         "commission_members",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
-        sa.Column("commission_id", sa.Integer(), sa.ForeignKey("commissions.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("deputy_id", sa.Integer(), sa.ForeignKey("deputies.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "commission_id",
+            sa.Integer(),
+            sa.ForeignKey("commissions.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "deputy_id",
+            sa.Integer(),
+            sa.ForeignKey("deputies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("joined_on", sa.Date()),
         sa.UniqueConstraint("commission_id", "deputy_id"),
     )
@@ -52,7 +64,12 @@ def upgrade() -> None:
     op.create_table(
         "sessions",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
-        sa.Column("commission_id", sa.Integer(), sa.ForeignKey("commissions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "commission_id",
+            sa.Integer(),
+            sa.ForeignKey("commissions.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("held_on", sa.Date(), nullable=False),
         sa.Column("topic", sa.String(500), nullable=False),
         sa.Column(
@@ -69,8 +86,18 @@ def upgrade() -> None:
     op.create_table(
         "attendances",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
-        sa.Column("session_id", sa.Integer(), sa.ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("deputy_id", sa.Integer(), sa.ForeignKey("deputies.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "session_id",
+            sa.Integer(),
+            sa.ForeignKey("sessions.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "deputy_id",
+            sa.Integer(),
+            sa.ForeignKey("deputies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column(
             "status",
             sa.Enum("present", "absent", "excused", name="attendancestatus"),
@@ -88,5 +115,7 @@ def downgrade() -> None:
     op.drop_table("commission_members")
     op.drop_table("commissions")
     op.drop_table("deputies")
-    op.execute("DROP TYPE IF EXISTS sessionstatus")
-    op.execute("DROP TYPE IF EXISTS attendancestatus")
+    # ENUM-типы существуют только в PostgreSQL; в SQLite это CHECK-ограничения
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS sessionstatus")
+        op.execute("DROP TYPE IF EXISTS attendancestatus")

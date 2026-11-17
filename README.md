@@ -1,190 +1,90 @@
 # Городская Дума — City Council Management System
 
-> Система учёта депутатов, комиссий, заседаний и посещаемости городской думы.
+> Система учёта депутатов, комиссий, заседаний, повестки и посещаемости городской думы.
+> Сквозной проект курса DevOps: все лабораторные работы ведутся в одном репозитории.
 
-[![Python](https://img.shields.io/badge/Python-3.12-blue)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green)](https://fastapi.tiangolo.com)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)](https://postgresql.org)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)](https://docker.com)
+**Стек:** Python 3.12 · FastAPI · SQLAlchemy (async) · Alembic · PostgreSQL 16 · Jinja2 (веб-интерфейс)
 
 ---
 
 ## Назначение системы
 
-Веб-приложение для учёта:
-- **Депутатов** (ФИО, партия, округ, дата избрания, статус)
+Веб-приложение (HTTP API + веб-интерфейс) для учёта:
+- **Депутатов** (ФИО, партия, округ, дата избрания, статус, контакты)
 - **Комиссий** (название, описание, председатель, состав)
-- **Заседаний** (дата, тема, статус, привязка к комиссии)
+- **Заседаний** (дата, тема, статус, привязка к комиссии) и **повестки** заседания
 - **Посещаемости** (явка депутатов на заседания)
 
-## Пользователи системы
+Техническое задание — [docs/ТЗ.md](docs/ТЗ.md), API — [docs/API.md](docs/API.md),
+схема данных — [docs/schema.md](docs/schema.md).
 
-| Роль | Описание |
-|------|----------|
-| Администратор | Полный доступ ко всем операциям |
-| Секретарь | Ведёт заседания и посещаемость |
-| Пользователь | Просмотр данных |
+## Пользователи и роли
+
+| Роль | Права |
+|------|-------|
+| `admin` | все операции (депутаты, комиссии, удаление) |
+| `secretary` | ведение заседаний, повестки и посещаемости |
+| без входа | просмотр данных (GET) |
+
+Изменяющие запросы требуют HTTP Basic-авторизации (см. «Авторизация» ниже).
 
 ## Правила предметной области
 
-1. **Председатель комиссии** обязан быть её членом. Попытка назначить председателем не-члена возвращает HTTP 422.
-2. **Кворум**: заседание можно пометить как «Проведено» только если на нём присутствовало более 50% членов комиссии.
+1. **Председатель комиссии** обязан быть её членом (иначе HTTP 422).
+2. **Кворум**: заседание можно пометить «Проведено», только если присутствовало более 50% членов комиссии.
 3. **Удаление председателя** из членов комиссии запрещено без смены председателя.
-4. Одна запись посещаемости на пару «депутат + заседание» (уникальность гарантируется на уровне БД).
+4. Одна запись посещаемости на пару «депутат + заседание» (уникальность на уровне БД).
 
 ---
 
-## Быстрый старт (Docker)
+## Быстрый старт (локально)
 
 ```bash
-# 1. Клонировать репозиторий
-git clone <repo-url>
-cd DevOps
-
-# 2. Создать .env
-cp .env.example .env
-# Отредактируйте .env — смените пароли!
-
-# 3. Запустить
-make up
-
-# 4. Открыть браузер
-# Веб-интерфейс: http://localhost:8000
-# API документация: http://localhost:8000/docs
-# Health check: http://localhost:8000/health
+./setup.sh          # или make setup: venv, зависимости, .env, миграции, make verify
+make run            # http://localhost:8000  (Swagger: /docs, health: /health)
+make verify         # весь обязательный набор проверок
 ```
 
-## Локальная разработка
+## Команды
 
-```bash
-# Первоначальная настройка
-make setup
+`make help` — полный список. Основные:
 
-# Применить миграции (нужен PostgreSQL)
-make migrate
-
-# Запустить приложение
-make run
-
-# Запустить тесты (SQLite, без PostgreSQL)
-make test
-
-# Проверка качества кода
-make quality
-
-# Полная проверка перед коммитом
-make verify
-```
-
----
-
-## Структура проекта
-
-```
-DevOps/
-├── app/
-│   ├── main.py          # Точка входа FastAPI
-│   ├── database.py      # Настройка SQLAlchemy
-│   ├── models.py        # ORM-модели
-│   ├── schemas.py       # Pydantic-схемы
-│   ├── routers/         # CRUD-роутеры по сущностям
-│   └── templates/       # HTML-шаблоны (Jinja2)
-├── alembic/             # Миграции БД
-│   └── versions/
-├── tests/               # Автоматические тесты
-├── docs/
-│   ├── API.md           # Описание API
-│   └── schema.md        # Схема данных
-├── Dockerfile
-├── docker-compose.yml
-├── Makefile
-├── requirements.txt
-├── pyproject.toml
-├── .env.example
-├── .gitignore
-├── CONTRIBUTING.md      # Правила внесения изменений
-└── README.md
-```
-
----
-
-## API
-
-Полное описание — в [docs/API.md](docs/API.md).
-
-Краткий обзор:
-
-| Метод | URL | Описание |
-|-------|-----|----------|
-| GET | `/health` | Проверка работоспособности |
-| GET/POST | `/api/v1/deputies/` | Список / создание депутатов |
-| GET/PATCH/DELETE | `/api/v1/deputies/{id}` | Детали / изменение / удаление |
-| GET/POST | `/api/v1/commissions/` | Список / создание комиссий |
-| GET/POST/DELETE | `/api/v1/commissions/{id}/members` | Состав комиссии |
-| GET/POST | `/api/v1/sessions/` | Заседания |
-| GET/POST | `/api/v1/attendance/` | Посещаемость |
-
----
-
-## Схема данных
-
-Подробно — в [docs/schema.md](docs/schema.md).
-
-```
-Deputy 1──* CommissionMember *──1 Commission
-                                    │
-                               1    │
-                               *    │
-                             Session
-                               │
-                          1   │
-                          *   │
-                        Attendance──*──1 Deputy
-```
-
----
-
-## Конфигурация через переменные окружения
-
-| Переменная | Обязательна | Описание |
-|---|---|---|
-| `DATABASE_URL` | ✅ | DSN для подключения к PostgreSQL |
-| `POSTGRES_USER` | ✅ | Пользователь БД |
-| `POSTGRES_PASSWORD` | ✅ | Пароль БД |
-| `POSTGRES_DB` | ✅ | Имя базы данных |
-| `SECRET_KEY` | ✅ | Ключ для секретов |
-| `APP_ENV` | — | `development` / `production` |
-| `DEBUG` | — | `true` / `false` |
-
-Шаблон: [`.env.example`](.env.example). **Файл `.env` никогда не коммитится!**
-
----
-
-## Команды Makefile
-
-| Команда | Описание |
+| Назначение | Команда |
 |---|---|
-| `make setup` | Первоначальная настройка (venv, зависимости) |
-| `make run` | Локальный запуск |
-| `make test` | Автоматические тесты |
-| `make quality` | Форматирование и анализ (ruff) |
-| `make migrate` | Применение миграций |
-| `make backup` | Резервная копия БД |
-| `make restore BACKUP=...` | Восстановление из резервной копии |
-| `make verify` | Полный набор проверок (quality + test) |
-| `make up` | Запуск Docker-окружения |
-| `make down` | Остановка Docker-окружения |
-| `make container-check` | Проверка health endpoint |
+| установка / первичная настройка | `make setup`, `make install` |
+| запуск | `make run` |
+| проверка (всё) | **`make verify`** = `policy` → `lint` → `sast` → `migrate-check` → `test` → `mutation` |
+| миграции | `make migrate`, `make migrate-down`, `make migrate-status`, `make migrate-check` |
+| резервная копия / восстановление | `make backup`, `make restore BACKUP=backups/<файл>`, `make restore-demo` |
 
----
+## Структура
 
-## Лицензия
+```
+.
+├── app/                 # FastAPI-приложение (роутеры, модели, схемы, бизнес-правила)
+├── alembic/versions/    # миграции 0001 … 0004
+├── tests/unit/          # unit-тесты
+├── tests/integration/   # интеграционные тесты (БД, миграции, бэкапы, API)
+├── scripts/             # backup/restore, политика проверок, seed
+├── deploy/              # ЛР2: развёртывание на двух Linux-ВМ без контейнеров
+├── Vagrantfile          # ЛР2: ВМ app + db
+├── docs/                # ТЗ, API, схема, отчёты по лабораторным
+├── Makefile             # единый интерфейс команд
+└── CONTRIBUTING.md      # правила внесения изменений (GitFlow, запреты, приёмка)
+```
 
-Учебный проект. © 2026
+## Лабораторные работы
 
----
+| ЛР | Тема | Где смотреть |
+|----|------|--------------|
+| 1 | Сквозной проект и Git-процесс | [docs/ТЗ.md](docs/ТЗ.md), [docs/API.md](docs/API.md), [docs/schema.md](docs/schema.md), [CONTRIBUTING.md](CONTRIBUTING.md), тег `v0.1.0`, [docs/lab3/MERGE_CONFLICT.md](docs/lab3/MERGE_CONFLICT.md) |
+| 2 | Развёртывание в Linux-среде | [docs/LAB2_DEPLOYMENT.md](docs/LAB2_DEPLOYMENT.md), `deploy/`, `Vagrantfile` |
+| 3 | Автоматические проверки, миграции, бэкапы | [docs/lab3/README_LAB3.md](docs/lab3/README_LAB3.md), `make verify` |
 
-## Лабораторная работа №3
+> История: до объединения код ЛР3 жил в каталоге `lab3/`, а в корне лежала версия ЛР1.
+> Теперь в корне — единое актуальное приложение; состояние ЛР1 доступно по тегу `v0.1.0`.
 
-Автоматические проверки, миграции и резервное копирование — в каталоге [`lab3/`](lab3/README.md):
-`cd lab3 && ./setup.sh`, затем `make verify`.
+## Конфигурация
+
+Все настройки — через переменные окружения, шаблон — [`.env.example`](.env.example).
+Файл `.env` в `.gitignore` и **никогда не коммитится**.

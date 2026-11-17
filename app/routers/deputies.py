@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -11,9 +12,29 @@ from app.schemas import DeputyCreate, DeputyOut, DeputyUpdate
 router = APIRouter(prefix="/deputies", tags=["deputies"])
 
 
+async def _commit_or_conflict(db: AsyncSession) -> None:
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Deputy with this email already exists"
+        ) from exc
+
+
 @router.get("/", response_model=list[DeputyOut])
-async def list_deputies(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Deputy).order_by(Deputy.id))
+async def list_deputies(
+    is_active: bool | None = None,
+    party: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Список депутатов с фильтрацией по статусу активности и партии (Ф1.3)."""
+    stmt = select(Deputy).order_by(Deputy.id)
+    if is_active is not None:
+        stmt = stmt.where(Deputy.is_active == is_active)
+    if party is not None:
+        stmt = stmt.where(Deputy.party == party)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 
@@ -21,7 +42,7 @@ async def list_deputies(db: AsyncSession = Depends(get_db)):
 async def create_deputy(data: DeputyCreate, db: AsyncSession = Depends(get_db)):
     deputy = Deputy(**data.model_dump())
     db.add(deputy)
-    await db.commit()
+    await _commit_or_conflict(db)
     await db.refresh(deputy)
     return deputy
 
@@ -41,7 +62,7 @@ async def update_deputy(deputy_id: int, data: DeputyUpdate, db: AsyncSession = D
         raise HTTPException(status_code=404, detail="Deputy not found")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(deputy, field, value)
-    await db.commit()
+    await _commit_or_conflict(db)
     await db.refresh(deputy)
     return deputy
 
