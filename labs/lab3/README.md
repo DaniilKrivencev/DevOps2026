@@ -1,13 +1,13 @@
 # Лабораторная работа №3 — автоматические проверки, миграции и резервное копирование
 
-Проект «Городская Дума» (FastAPI + SQLAlchemy async + Alembic). Каталог `lab3/` —
-самостоятельная копия приложения из ЛР1/ЛР2, к которой добавлен **единый локальный
-проверочный контур**: любое изменение принимается только после `make verify`.
+Проект «Городская Дума» (FastAPI + SQLAlchemy async + Alembic). К приложению из ЛР1/ЛР2
+добавлен **единый локальный проверочный контур**: любое изменение принимается только
+после `make verify`. Код выполнялся в каталоге `lab3/`, затем стал основой проекта в
+корне репозитория — все команды ниже выполняются из корня.
 
 ## Быстрый старт
 
 ```bash
-cd lab3
 ./setup.sh            # или make setup: venv, зависимости, .env, миграции, make verify
 make run              # http://localhost:8000  (Swagger: /docs)
 make verify           # весь обязательный набор проверок
@@ -40,25 +40,25 @@ make verify           # весь обязательный набор прове�
 | 1 | единый сценарий первоначальной настройки | `setup.sh`, `make setup` |
 | 2 | зафиксированные версии | `requirements.txt`, `requirements-dev.txt` (`==`), `.python-version` |
 | 3 | команды установки, запуска, проверки, миграций, бэкапа, восстановления | `Makefile` |
-| 4 | unit- и интеграционные тесты (≥ 40% ТЗ) | `tests/` — 169 тестов, 17/17 требований ТЗ, покрытие кода 96% → [docs/TESTING.md](docs/TESTING.md) |
+| 4 | unit- и интеграционные тесты (≥ 40% ТЗ) | `tests/` — 169 тестов, 17/17 требований ТЗ, покрытие кода 96% → [TESTING.md](TESTING.md) |
 | 5 | ошибочные данные, границы, обязательные правила, мутационное тестирование | `tests/unit/test_services.py`, `test_schemas.py`, `make mutation` (100%) |
 | 6 | отдельная тестовая конфигурация и изоляция данных | `app/config.py` (`APP_ENV=test`), `tests/conftest.py` (своя БД на каждый тест) |
 | 7 | линтер, SAST, отчёты тестов и покрытия | ruff, bandit, `reports/junit.xml`, `reports/htmlcov`, `reports/coverage.xml` |
-| 8 | средство миграций, ≥ 3 последовательных изменения | Alembic, ревизии `0002`, `0003`, `0004` → [docs/MIGRATIONS_BACKUP.md](docs/MIGRATIONS_BACKUP.md) |
+| 8 | средство миграций, ≥ 3 последовательных изменения | Alembic, ревизии `0002`, `0003`, `0004` → [MIGRATIONS_BACKUP.md](MIGRATIONS_BACKUP.md) |
 | 9 | чистая БД и обновление БД с данными | `tests/integration/test_migrations.py`, `make migrate-check`, журнал PostgreSQL |
 | 10 | новая функция, требующая изменения схемы | «Повестка заседания»: миграция `0004`, `app/routers/agenda.py` |
 | 11 | команды резервного копирования и восстановления | `scripts/db_backup.py`, `make backup` / `make restore` |
 | 12 | восстановление после намеренного удаления/изменения | `make restore-demo`, `tests/integration/test_backup_restore.py` |
 | 13 | единая команда `make verify` | `Makefile` |
-| 14 | запрет пропуска тестов, снижения порогов, исключений без обоснования | `scripts/check_policy.py` (`make policy`), [CONTRIBUTING.md](CONTRIBUTING.md) |
-| 15 | функциональное изменение через `make verify` | фильтр депутатов → [docs/VERIFY_CHANGE.md](docs/VERIFY_CHANGE.md) |
+| 14 | запрет пропуска тестов, снижения порогов, исключений без обоснования | `scripts/check_policy.py` (`make policy`), [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| 15 | функциональное изменение через `make verify` | фильтр депутатов → [VERIFY_CHANGE.md](VERIFY_CHANGE.md) |
 
-Конфликт слияния и слияния ЛР1–ЛР3: [docs/MERGE_CONFLICT.md](docs/MERGE_CONFLICT.md).
+Конфликт слияния и слияния ЛР1–ЛР3: [MERGE_CONFLICT.md](MERGE_CONFLICT.md).
 
 ## Структура
 
 ```
-lab3/
+. (корень репозитория)
 ├── setup.sh                 # единый сценарий настройки
 ├── Makefile                 # все команды, make verify
 ├── requirements*.txt        # зафиксированные версии
@@ -76,7 +76,7 @@ lab3/
 │   └── check_mutation.py    # порог mutation score
 ├── tests/unit/              # 94 теста
 ├── tests/integration/       # 75 тестов
-└── docs/                    # отчёты
+└── labs/lab3/               # отчёты (этот каталог)
 ```
 
 ## Кто что делал

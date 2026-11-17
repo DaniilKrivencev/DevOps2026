@@ -39,7 +39,7 @@ make run            # ...
 строка для Windows из второй ветки сохранена. Маркеры конфликта удалены, затем:
 
 ```bash
-git add README.md docs/MERGE_CONFLICT_LAB1.md
+git add README.md docs/MERGE_CONFLICT_LAB1.md   # (сейчас файл: labs/lab1/MERGE_CONFLICT.md)
 git commit            # коммит слияния с описанием конфликта
 git log --graph --oneline -6
 ```
