@@ -21,6 +21,7 @@
 #   scripts/container_check.sh          — всё
 #   scripts/container_check.sh lint     — только шаг 1 (быстро, без запуска)
 #   KEEP=1 scripts/container_check.sh   — не удалять стенд после проверки
+#   SKIP_BUILD=1 APP_IMAGE=... APP_TAG=... — проверить готовый образ (CI: тот же образ публикуется)
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -81,9 +82,14 @@ code() { cat "$REPORTS/.code"; }
 instance() { curl -sS -D - -o /dev/null "$BASE/health" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-instance-id"{print $2}'; }
 
 # ─── 2. Сборка образа ────────────────────────────────────────────────────────
-step "Сборка образа ${APP_IMAGE}:${APP_TAG}"
-dc build --pull=false app1 >/dev/null 2>&1 || { dc build --pull=false app1; fail "сборка образа"; }
 IMAGE="${APP_IMAGE}:${APP_TAG}"
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+  step "Готовый образ $IMAGE"
+  docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "образ $IMAGE не найден"
+else
+  step "Сборка образа $IMAGE"
+  dc build --pull=false app1 >/dev/null 2>&1 || { dc build --pull=false app1; fail "сборка образа"; }
+fi
 img_user=$(docker image inspect -f '{{.Config.User}}' "$IMAGE")
 case "${img_user%%:*}" in ""|root|0) fail "образ запускается от root (User='$img_user')";; esac
 ok "USER образа: $img_user"
@@ -97,7 +103,7 @@ ok "в образе нет .env и переменных с секретами"
 
 # ─── 3. Запуск ───────────────────────────────────────────────────────────────
 step "Запуск: db → migrate → app1, app2 → nginx (healthcheck, порядок старта)"
-dc up -d --wait --wait-timeout 180 >/dev/null 2>&1 || { dc ps -a; dc logs --tail=30; fail "окружение не поднялось"; }
+dc up -d --no-build --wait --wait-timeout 180 >/dev/null 2>&1 || { dc ps -a; dc logs --tail=30; fail "окружение не поднялось"; }
 dc ps --format 'table {{.Service}}\t{{.Status}}'
 health=$(curl -fsS "$BASE/health") || fail "/health через nginx недоступен"
 grep -q '"database":"ok"' <<<"$health" || fail "/health: $health"
@@ -151,6 +157,7 @@ api GET "/api/v1/deputies/$DEP_ID" >/dev/null
 [ "$(code)" = 200 ] || fail "после обновления образа запись пропала"
 ok "после обновления образа ($running) запись на месте"
 dc up -d --wait --wait-timeout 180 >/dev/null 2>&1   # вернуть исходный тег
+docker rmi "${IMAGE}-upd" >/dev/null 2>&1 || true
 
 # ─── 9. Отказ экземпляра ─────────────────────────────────────────────────────
 step "Отказ одного экземпляра: сервис доступен"
