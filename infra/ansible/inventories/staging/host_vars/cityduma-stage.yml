@@ -1,0 +1,7 @@
+---
+# ── УЗЛОВЫЕ параметры ──
+ansible_host: 172.27.206.60
+# чистая Vagrant-ВМ: первый вход — служебным пользователем vagrant по его ключу
+ansible_user: vagrant
+ansible_ssh_private_key_file: ~/.ssh/vagrant-infra-stage.key
+host_hostname: cityduma-stage

@@ -89,7 +89,8 @@ Windows (PowerShell): `py -3.12 -m venv .venv; .venv\Scripts\pip install -r requ
 ├── Vagrantfile          # ЛР2: ВМ app + db; ЛР4: ВМ docker
 ├── Dockerfile, .dockerignore, docker-compose.yml, nginx/   # ЛР4
 ├── .github/             # ЛР5: workflows CI, CODEOWNERS
-├── labs/lab1 … lab6/    # отчёты и материалы по каждой лабораторной (см. labs/README.md)
+├── infra/ansible/       # ЛР7: инфраструктура как код (Ansible)
+├── labs/lab1 … lab7/    # отчёты и материалы по каждой лабораторной (см. labs/README.md)
 ├── Makefile             # единый интерфейс команд
 └── CONTRIBUTING.md      # правила внесения изменений (GitFlow, запреты, приёмка)
 ```
@@ -109,6 +110,7 @@ Windows (PowerShell): `py -3.12 -m venv .venv; .venv\Scripts\pip install -r requ
 | 4 | Контейнеризация и проверка окружения | [labs/lab4](labs/lab4/README.md) | `v0.5.0` |
 | 5 | Continuous Integration | [labs/lab5](labs/lab5/README.md) | `v0.5.0` |
 | 6 | Continuous Delivery и проверка релиза | [labs/lab6](labs/lab6/README.md) | `v0.6.0` |
+| 7 | Управление конфигурацией и воспроизводимая инфраструктура | [labs/lab7](labs/lab7/README.md) | `v0.7.0` |
 
 ## Конфигурация
 

@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Ключ CD (ЛР6): без shell, проброса портов и агента — только команда развёртывания.
+{% if deploy_ssh_pubkey %}
+command="env STAGING_DIR={{ app_dir }} COMPOSE_PROJECT_NAME={{ project_name }} {{ app_dir }}/bin/cityduma-deploy",restrict {{ deploy_ssh_pubkey }}
+{% endif %}

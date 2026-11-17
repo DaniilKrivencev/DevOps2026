@@ -1,0 +1,6 @@
+---
+# Разрешённые входящие TCP-порты (всё остальное — DROP). Расширение списка —
+# изменение критического файла (CODEOWNERS) и проверка scripts/infra_policy.py.
+firewall_tcp_services:
+  - {name: ssh, port: "{{ ssh_port }}", source: "{{ ssh_allowed_from }}"}
+  - {name: http, port: "{{ http_port }}", source: 0.0.0.0/0}

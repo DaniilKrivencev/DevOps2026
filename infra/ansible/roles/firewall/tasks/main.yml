@@ -1,0 +1,76 @@
+---
+# Firewall на iptables: политика INPUT DROP, открыты только порты из firewall_tcp_services.
+- name: Автосохранение iptables-persistent отключено (правила сохраняет Ansible)
+  ansible.builtin.debconf:
+    name: iptables-persistent
+    question: "iptables-persistent/{{ item }}"
+    value: "false"
+    vtype: boolean
+  loop: [autosave_v4, autosave_v6]
+
+- name: Пакеты iptables
+  ansible.builtin.apt:
+    name: [iptables, iptables-persistent]
+    state: present
+
+- name: Пакет ufw удалён (правила задаются только iptables)
+  ansible.builtin.apt:
+    name: ufw
+    state: absent
+
+- name: Правила firewall (шаблоны /etc/iptables/rules.v4|v6, загружаются при старте ОС)
+  ansible.builtin.template:
+    src: "rules.{{ item }}.j2"
+    dest: "/etc/iptables/rules.{{ item }}"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: [v4, v6]
+
+- name: Фактические правила INPUT
+  # Обоснование: модуля чтения правил iptables во встроенных модулях нет; только чтение.
+  ansible.builtin.command: "{{ item }} -S INPUT"
+  loop: [iptables, ip6tables]
+  register: firewall_actual
+  changed_when: false
+  check_mode: false
+
+- name: Есть ли расхождение фактических правил с требуемыми
+  ansible.builtin.set_fact:
+    firewall_drift:
+      - "{{ firewall_actual.results[0].stdout_lines != firewall_expected_v4 }}"
+      - "{{ firewall_actual.results[1].stdout_lines != firewall_expected_v6 }}"
+  vars:
+    # правила в шаблонах записаны в каноническом виде `iptables -S` — их можно сравнить построчно
+    firewall_expected_v4: >-
+      {{ ['-P INPUT DROP'] + (lookup('ansible.builtin.template', 'rules.v4.j2').splitlines()
+         | select('match', '^-A INPUT') | list) }}
+    firewall_expected_v6: >-
+      {{ ['-P INPUT DROP'] + (lookup('ansible.builtin.template', 'rules.v6.j2').splitlines()
+         | select('match', '^-A INPUT') | list) }}
+
+- name: Применить правила, если фактические отличаются от требуемых (ручное изменение, первый запуск)
+  # Обоснование: iptables-restore — единственный способ атомарно применить набор правил;
+  # --noflush не трогает цепочки Docker. Выполняется только при расхождении.
+  ansible.builtin.command: "{{ item.cmd }}-restore --noflush /etc/iptables/rules.{{ item.ver }}"
+  loop:
+    - {cmd: iptables, ver: v4, idx: 0}
+    - {cmd: ip6tables, ver: v6, idx: 1}
+  when: firewall_drift[item.idx] | bool and not ansible_check_mode
+  changed_when: true
+
+- name: "Режим --check: правила firewall будут применены заново"
+  ansible.builtin.debug:
+    msg: "{{ item.cmd }}: фактические правила INPUT отличаются от требуемых"
+  loop:
+    - {cmd: iptables, idx: 0}
+    - {cmd: ip6tables, idx: 1}
+  when: firewall_drift[item.idx] | bool and ansible_check_mode
+  changed_when: true
+
+- name: Загрузка правил при старте ОС
+  ansible.builtin.service:
+    name: netfilter-persistent
+    enabled: true
+  # в режиме --check на чистой машине пакет ещё не установлен
+  ignore_errors: "{{ ansible_check_mode }}"

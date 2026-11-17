@@ -44,6 +44,11 @@ CRITICAL_PATTERNS = (
     ".github/",
     "tests/",
     "alembic/versions/",
+    "infra/ansible/roles/",
+    "infra/ansible/inventories/",
+    "infra/ansible/group_vars/",
+    "infra/ansible/site.yml",
+    "scripts/infra_policy.py",
 )
 TEST_DEF_RE = re.compile(r"^\s*(async\s+)?def\s+test_\w+", re.MULTILINE)
 EMPTY_SHA = "0" * 40

@@ -1,0 +1,9 @@
+---
+base_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - python3
+  - iproute2
+  - acl
+base_manage_hostname: true

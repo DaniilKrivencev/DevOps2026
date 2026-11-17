@@ -1,0 +1,19 @@
+---
+# Подготовка чистой машины: проверка ОС, базовые пакеты, имя узла.
+- name: Поддерживается только Debian-подобная ОС
+  ansible.builtin.assert:
+    that: ansible_facts['os_family'] == 'Debian'
+    fail_msg: "Ожидается Debian/Ubuntu, получено {{ ansible_facts['distribution'] }}"
+    quiet: true
+
+- name: Базовые пакеты
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Имя узла
+  ansible.builtin.hostname:
+    name: "{{ host_hostname }}"
+  when: base_manage_hostname | bool

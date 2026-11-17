@@ -1,0 +1,7 @@
+---
+# ansible-lint (ЛР7): профиль production — самый строгий набор правил.
+# Исключений правил нет; добавление — только с обоснованием и через CODEOWNERS.
+profile: production
+exclude_paths:
+  - test/
+offline: true

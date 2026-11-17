@@ -1,0 +1,156 @@
+---
+# Приложение: каталоги и права, конфигурация из шаблонов, запуск docker compose.
+# Версию приложения после первичной настройки выпускает CD (ЛР6, state/current.tag);
+# Ansible отвечает за состояние окружения и не откатывает выпущенную версию.
+- name: Каталоги приложения
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ app_dir }}", owner: root, mode: "0755"}
+    - {path: "{{ app_dir }}/bin", owner: root, mode: "0755"}
+    - {path: "{{ app_dir }}/compose", owner: "{{ deploy_user }}", mode: "0750"}
+    - {path: "{{ app_dir }}/compose/nginx", owner: "{{ deploy_user }}", mode: "0750"}
+    - {path: "{{ app_dir }}/state", owner: "{{ deploy_user }}", mode: "0750"}
+    - {path: "{{ app_dir }}/backups", owner: "{{ deploy_user }}", mode: "0750"}
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Сценарий выпуска cityduma-deploy (владелец root — pipeline не может его изменить)
+  ansible.builtin.copy:
+    src: "{{ app_repo_root }}/deploy/staging/remote.sh"
+    dest: "{{ app_dir }}/bin/cityduma-deploy"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Конфигурация контейнеров из репозитория (compose и nginx)
+  ansible.builtin.copy:
+    src: "{{ app_repo_root }}/{{ item.src }}"
+    dest: "{{ app_dir }}/compose/{{ item.dest }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+  loop:
+    - {src: docker-compose.yml, dest: docker-compose.yml}
+    - {src: nginx/nginx.conf, dest: nginx/nginx.conf}
+  register: app_files
+  notify: Перечитать nginx.conf
+
+- name: Настройки окружения .env (из шаблона и vault)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    owner: root
+    group: "{{ deploy_user }}"
+    mode: "0640"
+  register: app_env
+  no_log: true
+
+- name: Вход в registry (только чтение образов)
+  # Обоснование: встроенного модуля docker login нет; пароль передаётся через stdin,
+  # повторный вход перезаписывает те же учётные данные — изменением не считается.
+  ansible.builtin.command:
+    cmd: docker login {{ app_registry_host }} -u {{ registry_username }} --password-stdin
+    stdin: "{{ registry_password }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: registry_password | length > 0
+  changed_when: false
+  no_log: true
+
+- name: Выпущенная версия (если CD уже выпускал релиз)
+  ansible.builtin.slurp:
+    src: "{{ app_dir }}/state/current.tag"
+  register: app_current_tag
+  failed_when: false
+
+- name: Версия для запуска
+  ansible.builtin.set_fact:
+    app_release_tag: >-
+      {{ (app_current_tag.content | b64decode | trim)
+         if (app_current_tag.content is defined) else app_tag }}
+
+- name: Учётная запись pipeline уже существует? (в режиме --check на чистой машине — нет)
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ deploy_user }}"
+    fail_key: false
+
+- name: Состояние контейнеров
+  # Обоснование: встроенного модуля docker compose нет; команда только читает состояние.
+  ansible.builtin.command:
+    cmd: >-
+      docker compose -p {{ project_name }} --env-file {{ app_dir }}/.env
+      -f {{ app_dir }}/compose/docker-compose.yml ps --all --format json
+  become: true
+  become_user: "{{ deploy_user }}"
+  environment:
+    APP_TAG: "{{ app_release_tag }}"
+  register: app_ps
+  when: ansible_facts.getent_passwd[deploy_user] is not none
+  changed_when: false
+  check_mode: false
+
+- name: Нужен ли запуск (изменилась конфигурация, сервис не работает или не та версия)
+  ansible.builtin.set_fact:
+    app_containers: >-
+      {{ [] if not app_ps_out
+         else (app_ps_out | from_json) if app_ps_out.startswith('[')
+         else (app_ps_out.splitlines() | map('from_json') | list) }}
+  vars:
+    app_ps_out: "{{ app_ps.stdout | default('') if (app_ps.rc | default(1)) == 0 else '' }}"
+
+- name: Решение о запуске
+  ansible.builtin.set_fact:
+    app_healthy: >-
+      {{ app_containers | selectattr('Service', 'in', app_services)
+         | selectattr('State', 'equalto', 'running')
+         | selectattr('Health', 'in', ['healthy', ''])
+         | map(attribute='Service') | list }}
+    app_image_running: >-
+      {{ (app_containers | selectattr('Service', 'equalto', 'app1') | map(attribute='Image') | list
+          + ['']) | first }}
+
+- name: Нужен ли запуск docker compose
+  ansible.builtin.set_fact:
+    app_need_up: >-
+      {{ app_files is changed or app_env is changed
+         or (app_healthy | length) < (app_services | length)
+         or app_image_running != app_image ~ ':' ~ app_release_tag }}
+
+- name: Запуск окружения docker compose
+  # Обоснование: встроенного модуля docker compose нет. Выполняется только при
+  # расхождении с требуемым состоянием — повторный запуск без изменений его пропускает.
+  ansible.builtin.command:
+    cmd: >-
+      docker compose -p {{ project_name }} --env-file {{ app_dir }}/.env
+      -f {{ app_dir }}/compose/docker-compose.yml
+      up -d --no-build --remove-orphans --wait --wait-timeout {{ app_wait_timeout }}
+  become: true
+  become_user: "{{ deploy_user }}"
+  environment:
+    APP_TAG: "{{ app_release_tag }}"
+  when: app_need_up | bool and not ansible_check_mode
+  changed_when: true
+
+- name: "Режим --check: будет выполнен docker compose up"
+  ansible.builtin.debug:
+    msg: "Запуск {{ app_image }}:{{ app_release_tag }} (сейчас работают: {{ app_healthy | join(', ') or 'нет' }})"
+  when: app_need_up | bool and ansible_check_mode
+  changed_when: true
+
+- name: Применить отложенные действия до проверки
+  ansible.builtin.meta: flush_handlers
+
+- name: Записать первичную версию для CD (если выпусков ещё не было)
+  ansible.builtin.copy:
+    content: "{{ app_release_tag }}\n"
+    dest: "{{ app_dir }}/state/current.tag"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+    force: false

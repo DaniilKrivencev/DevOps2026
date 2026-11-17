@@ -1,0 +1,15 @@
+# {{ ansible_managed }} — окружение {{ env_name }}
+# Применяется: iptables-restore --noflush (цепочки Docker не затрагиваются).
+# Правила записаны в каноническом виде `iptables -S` — по ним Ansible
+# обнаруживает ручные изменения и восстанавливает требуемое состояние.
+*filter
+:INPUT DROP [0:0]
+-F INPUT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+-A INPUT -p icmp -m icmp --icmp-type 8 -j ACCEPT
+{% for svc in firewall_tcp_services %}
+-A INPUT{% if svc.source != '0.0.0.0/0' %} -s {{ svc.source }}{% endif %} -p tcp -m tcp --dport {{ svc.port }} -m conntrack --ctstate NEW -m comment --comment cityduma-{{ svc.name }} -j ACCEPT
+{% endfor %}
+COMMIT
