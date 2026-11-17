@@ -41,3 +41,5 @@ Thumbs.db
 .lockvenv/
 .ci-cache/
 deploy/cd_deploy_key*
+infra/ansible/.vault_pass
+infra/ansible/test/.work/
