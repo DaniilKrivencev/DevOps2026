@@ -17,8 +17,8 @@
 - **Заседаний** (дата, тема, статус, привязка к комиссии) и **повестки** заседания
 - **Посещаемости** (явка депутатов на заседания)
 
-Техническое задание — [docs/ТЗ.md](docs/ТЗ.md), API — [docs/API.md](docs/API.md),
-схема данных — [docs/schema.md](docs/schema.md).
+Техническое задание — [labs/lab1/ТЗ.md](labs/lab1/ТЗ.md), API — [labs/lab1/API.md](labs/lab1/API.md),
+схема данных — [labs/lab1/schema.md](labs/lab1/schema.md).
 
 ## Пользователи и роли
 
@@ -86,24 +86,26 @@ Windows (PowerShell): `py -3.12 -m venv .venv; .venv\Scripts\pip install -r requ
 ├── Vagrantfile          # ЛР2: ВМ app + db; ЛР4: ВМ docker
 ├── Dockerfile, .dockerignore, docker-compose.yml, nginx/   # ЛР4
 ├── .github/             # ЛР5: workflows CI, CODEOWNERS
-├── docs/                # ТЗ, API, схема, отчёты по лабораторным
+├── labs/lab1 … lab6/    # отчёты и материалы по каждой лабораторной (см. labs/README.md)
 ├── Makefile             # единый интерфейс команд
 └── CONTRIBUTING.md      # правила внесения изменений (GitFlow, запреты, приёмка)
 ```
 
 ## Лабораторные работы
 
-| ЛР | Тема | Где смотреть |
-|----|------|--------------|
-| 1 | Сквозной проект и Git-процесс | [docs/ТЗ.md](docs/ТЗ.md), [docs/API.md](docs/API.md), [docs/schema.md](docs/schema.md), [CONTRIBUTING.md](CONTRIBUTING.md), тег `v0.1.0`, [docs/lab3/MERGE_CONFLICT.md](docs/lab3/MERGE_CONFLICT.md) |
-| 2 | Развёртывание в Linux-среде | [docs/LAB2_DEPLOYMENT.md](docs/LAB2_DEPLOYMENT.md), `deploy/`, `Vagrantfile` |
-| 3 | Автоматические проверки, миграции, бэкапы | [docs/lab3/README_LAB3.md](docs/lab3/README_LAB3.md), `make verify` |
-| 4 | Контейнеризация и проверка окружения | [docs/LAB4_CONTAINERS.md](docs/LAB4_CONTAINERS.md), `make docker-up`, `make container-check` |
-| 5 | Continuous Integration | [docs/LAB5_CI.md](docs/LAB5_CI.md), `.github/workflows/`, `make ci` |
-| 6 | Continuous Delivery и проверка релиза | [docs/LAB6_CD.md](docs/LAB6_CD.md), `.github/workflows/cd.yml`, `make cd-deploy TAG=...`, `/version` |
+Каждая лабораторная — в своём каталоге [`labs/`](labs/README.md): отчёт (`README.md`),
+список файлов проекта, которые к ней относятся, и команды для проверки на защите.
+Само приложение одно и лежит в корне — так требует задание (один репозиторий,
+сквозной проект), и только так работают `make`, Docker, CI и CD.
 
-> История: до объединения код ЛР3 жил в каталоге `lab3/`, а в корне лежала версия ЛР1.
-> Теперь в корне — единое актуальное приложение; состояние ЛР1 доступно по тегу `v0.1.0`.
+| ЛР | Тема | Каталог | Тег |
+|----|------|---------|-----|
+| 1 | Сквозной проект и Git-процесс | [labs/lab1](labs/lab1/README.md) | `v0.1.0` |
+| 2 | Развёртывание в Linux-среде | [labs/lab2](labs/lab2/README.md) | — |
+| 3 | Автоматические проверки, миграции, бэкапы | [labs/lab3](labs/lab3/README.md) | — |
+| 4 | Контейнеризация и проверка окружения | [labs/lab4](labs/lab4/README.md) | `v0.5.0` |
+| 5 | Continuous Integration | [labs/lab5](labs/lab5/README.md) | `v0.5.0` |
+| 6 | Continuous Delivery и проверка релиза | [labs/lab6](labs/lab6/README.md) | `v0.6.0` |
 
 ## Конфигурация
 

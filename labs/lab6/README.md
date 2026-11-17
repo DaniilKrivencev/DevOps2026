@@ -29,13 +29,13 @@
 
 | Файл | Назначение |
 |---|---|
-| [`.github/workflows/cd.yml`](../.github/workflows/cd.yml) | pipeline доставки: автоматически после CI (main, теги) и вручную (deploy / rollback / verify / status) |
-| [`scripts/cd.sh`](../scripts/cd.sh) | клиент: передаёт конфигурацию окружения и команду на сервер (`make cd-deploy TAG=…`) |
-| [`deploy/staging/remote.sh`](../deploy/staging/remote.sh) | сценарий сервера `cityduma-deploy`: проверки, pull, бэкап, запуск, проверка, возврат, блокировка |
-| [`deploy/staging/setup_staging.sh`](../deploy/staging/setup_staging.sh) | подготовка сервера администратором: Docker, `cd-deploy`, каталоги, `.env`, ключ, iptables |
-| [`deploy/staging/staging.env.example`](../deploy/staging/staging.env.example) | шаблон настроек окружения (без значений) |
-| [`scripts/smoke_test.py`](../scripts/smoke_test.py) | основной пользовательский сценарий после развёртывания |
-| [`deploy/staging/demo/Dockerfile`](../deploy/staging/demo/Dockerfile) | образы «неудачных выпусков» для защиты |
+| [`.github/workflows/cd.yml`](../../.github/workflows/cd.yml) | pipeline доставки: автоматически после CI (main, теги) и вручную (deploy / rollback / verify / status) |
+| [`scripts/cd.sh`](../../scripts/cd.sh) | клиент: передаёт конфигурацию окружения и команду на сервер (`make cd-deploy TAG=…`) |
+| [`deploy/staging/remote.sh`](../../deploy/staging/remote.sh) | сценарий сервера `cityduma-deploy`: проверки, pull, бэкап, запуск, проверка, возврат, блокировка |
+| [`deploy/staging/setup_staging.sh`](../../deploy/staging/setup_staging.sh) | подготовка сервера администратором: Docker, `cd-deploy`, каталоги, `.env`, ключ, iptables |
+| [`deploy/staging/staging.env.example`](../../deploy/staging/staging.env.example) | шаблон настроек окружения (без значений) |
+| [`scripts/smoke_test.py`](../../scripts/smoke_test.py) | основной пользовательский сценарий после развёртывания |
+| [`deploy/staging/demo/Dockerfile`](../../deploy/staging/demo/Dockerfile) | образы «неудачных выпусков» для защиты |
 | `GET /version` (`app/main.py`) | версия кода, коммит и время сборки работающего образа |
 | `Vagrantfile` → ВМ `staging` (172.27.206.40) | тестовое окружение |
 

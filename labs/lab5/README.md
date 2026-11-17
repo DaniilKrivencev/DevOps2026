@@ -8,10 +8,10 @@
 | Registry | **GitHub Container Registry** `ghcr.io/daniilkrivencev/devops2026` | встроен в GitHub, доступ по `GITHUB_TOKEN` без хранения паролей |
 | Исполнение проверок | **Docker-in-Docker**: сервис `docker:29.9.0-dind` в каждом job | требование от 12.11.2026 — все проверки в DinD |
 
-Файлы: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (граф этапов),
-[`.github/workflows/ci-stage.yml`](../.github/workflows/ci-stage.yml) (один этап в DinD),
-[`scripts/ci.sh`](../scripts/ci.sh) (команды этапов), [`.github/CODEOWNERS`](../.github/CODEOWNERS),
-[`scripts/acceptance_guard.py`](../scripts/acceptance_guard.py).
+Файлы: [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (граф этапов),
+[`.github/workflows/ci-stage.yml`](../../.github/workflows/ci-stage.yml) (один этап в DinD),
+[`scripts/ci.sh`](../../scripts/ci.sh) (команды этапов), [`.github/CODEOWNERS`](../../.github/CODEOWNERS),
+[`scripts/acceptance_guard.py`](../../scripts/acceptance_guard.py).
 
 ## 2. Pipeline
 
