@@ -1,10 +1,12 @@
 # =============================================================================
-# Городская Дума — Лабораторная работа №3
-# Единый локальный проверочный контур: make verify
+# Городская Дума — единый интерфейс команд проекта
+#   make verify           — весь обязательный набор локальных проверок (ЛР3)
+#   make container-check  — проверка контейнерного окружения (ЛР4)
 # =============================================================================
 
 .PHONY: help setup install run lint format sast policy test test-unit test-integration test-pg \
-        mutation \
+        mutation docker-build docker-up docker-down docker-ps docker-logs docker-migrate \
+        docker-backup docker-restore docker-restore-new-volume container-lint container-check \
         migrate migrate-down migrate-status migrate-new migrate-check \
         seed backup restore restore-demo verify clean
 
@@ -12,6 +14,14 @@ VENV    := .venv
 PY      := $(shell [ -x $(VENV)/bin/python ] && echo $(VENV)/bin/python || echo python3)
 REPORTS := reports
 SRC     := app scripts tests alembic
+
+# Версия и тег образа: версия приложения + короткий SHA коммита (не latest)
+GIT_SHA     := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo nogit)
+APP_VERSION := $(shell sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' app/main.py)
+APP_TAG     ?= $(APP_VERSION)-$(GIT_SHA)
+export GIT_SHA APP_VERSION APP_TAG
+COMPOSE     := docker compose
+BACKUP_DIR  := backups
 
 # Пороги. Снижать запрещено — проверяет scripts/check_policy.py
 MUTATION_MIN := 90
@@ -128,3 +138,50 @@ verify: ## ВЕСЬ обязательный набор проверок: policy
 
 clean: ## Удалить отчёты и кэши
 	rm -rf $(REPORTS) .pytest_cache .ruff_cache .coverage .mutmut-cache
+
+# ─── Контейнеры (ЛР4) ────────────────────────────────────────────────────────
+docker-build: ## Собрать образ приложения cityduma:$(APP_TAG)
+	$(COMPOSE) build app1
+
+docker-up: ## Поднять окружение: db, migrate, app1, app2, nginx (http://localhost:8080)
+	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) ps
+
+docker-down: ## Остановить окружение (данные в volume сохраняются)
+	$(COMPOSE) down
+
+docker-ps: ## Состояние контейнеров и healthcheck
+	$(COMPOSE) ps
+
+docker-logs: ## Журналы всех контейнеров
+	$(COMPOSE) logs -f --tail=100
+
+docker-migrate: ## Применить миграции в контейнерной среде
+	$(COMPOSE) run --rm migrate alembic upgrade head
+	$(COMPOSE) run --rm migrate alembic current
+
+docker-backup: ## Резервная копия БД из контейнера → backups/pg_<время>.dump
+	@mkdir -p $(BACKUP_DIR)
+	@f=$(BACKUP_DIR)/pg_$$(date +%Y%m%d_%H%M%S).dump; \
+	  $(COMPOSE) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > $$f \
+	  && echo "✔ резервная копия: $$f ($$(du -h $$f | cut -f1))"
+
+docker-restore: ## Восстановить БД в контейнере: make docker-restore BACKUP=backups/pg_xxx.dump
+	@if [ -z "$(BACKUP)" ]; then echo "$(RED)✗ make docker-restore BACKUP=backups/<файл>.dump$(RESET)"; exit 1; fi
+	$(COMPOSE) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --clean --if-exists' < $(BACKUP)
+	@echo "✔ восстановлено из $(BACKUP)"
+
+docker-restore-new-volume: ## Восстановить в НОВЫЙ volume: make docker-restore-new-volume BACKUP=... VOLUME=имя
+	@if [ -z "$(BACKUP)" ] || [ -z "$(VOLUME)" ]; then \
+	  echo "$(RED)✗ make docker-restore-new-volume BACKUP=backups/<файл>.dump VOLUME=<новый volume>$(RESET)"; exit 1; fi
+	$(COMPOSE) down
+	PG_VOLUME=$(VOLUME) $(COMPOSE) up -d --wait db
+	PG_VOLUME=$(VOLUME) $(COMPOSE) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --no-owner' < $(BACKUP)
+	PG_VOLUME=$(VOLUME) $(COMPOSE) up -d --wait
+	@echo "✔ окружение работает на volume $(VOLUME); для постоянного использования задайте PG_VOLUME=$(VOLUME) в .env"
+
+container-lint: ## Запреты: latest, root, секреты в образе, отключённый healthcheck, лишние порты
+	PY=$(PY) ./scripts/container_check.sh lint
+
+container-check: ## ПОЛНАЯ проверка контейнерного окружения на отдельном стенде (обязательна перед изменением)
+	PY=$(PY) ./scripts/container_check.sh

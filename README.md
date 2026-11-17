@@ -56,6 +56,8 @@ make verify         # весь обязательный набор провер�
 | проверка (всё) | **`make verify`** = `policy` → `lint` → `sast` → `migrate-check` → `test` → `mutation` |
 | миграции | `make migrate`, `make migrate-down`, `make migrate-status`, `make migrate-check` |
 | резервная копия / восстановление | `make backup`, `make restore BACKUP=backups/<файл>`, `make restore-demo` |
+| контейнеры | `make docker-up`, `make docker-down`, `make docker-backup`, `make docker-restore BACKUP=...` |
+| проверка контейнерного окружения | **`make container-check`** (запреты + 12 проверок на отдельном стенде) |
 
 ## Структура
 
@@ -67,7 +69,8 @@ make verify         # весь обязательный набор провер�
 ├── tests/integration/   # интеграционные тесты (БД, миграции, бэкапы, API)
 ├── scripts/             # backup/restore, политика проверок, seed
 ├── deploy/              # ЛР2: развёртывание на двух Linux-ВМ без контейнеров
-├── Vagrantfile          # ЛР2: ВМ app + db
+├── Vagrantfile          # ЛР2: ВМ app + db; ЛР4: ВМ docker
+├── Dockerfile, .dockerignore, docker-compose.yml, nginx/   # ЛР4
 ├── docs/                # ТЗ, API, схема, отчёты по лабораторным
 ├── Makefile             # единый интерфейс команд
 └── CONTRIBUTING.md      # правила внесения изменений (GitFlow, запреты, приёмка)
@@ -80,6 +83,7 @@ make verify         # весь обязательный набор провер�
 | 1 | Сквозной проект и Git-процесс | [docs/ТЗ.md](docs/ТЗ.md), [docs/API.md](docs/API.md), [docs/schema.md](docs/schema.md), [CONTRIBUTING.md](CONTRIBUTING.md), тег `v0.1.0`, [docs/lab3/MERGE_CONFLICT.md](docs/lab3/MERGE_CONFLICT.md) |
 | 2 | Развёртывание в Linux-среде | [docs/LAB2_DEPLOYMENT.md](docs/LAB2_DEPLOYMENT.md), `deploy/`, `Vagrantfile` |
 | 3 | Автоматические проверки, миграции, бэкапы | [docs/lab3/README_LAB3.md](docs/lab3/README_LAB3.md), `make verify` |
+| 4 | Контейнеризация и проверка окружения | [docs/LAB4_CONTAINERS.md](docs/LAB4_CONTAINERS.md), `make docker-up`, `make container-check` |
 
 > История: до объединения код ЛР3 жил в каталоге `lab3/`, а в корне лежала версия ЛР1.
 > Теперь в корне — единое актуальное приложение; состояние ЛР1 доступно по тегу `v0.1.0`.
