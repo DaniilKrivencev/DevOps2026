@@ -33,7 +33,7 @@ Base URL: `http://localhost:8000/api/v1`
 | `POST/PATCH` заседаний, повестка, посещаемость | `admin`, `secretary` |
 
 ```bash
-curl -u admin:change_me -X POST http://localhost:8000/api/v1/deputies/ \
+curl -u "admin:$ADMIN_PASSWORD" -X POST http://localhost:8000/api/v1/deputies/ \
      -H 'Content-Type: application/json' -d '{"full_name": "Иванов Иван Иванович"}'
 ```
 
