@@ -112,6 +112,15 @@ def main(argv: list[str]) -> int:
     if not base or base == EMPTY_SHA:
         print("guard: нет базы для сравнения (новая ветка) — проверка пропущена")
         return 0
+    try:
+        _git("cat-file", "-e", f"{base}^{{commit}}")
+    except subprocess.CalledProcessError:
+        # принудительная отправка с переписанной историей: прежней вершины ветки больше нет
+        print(
+            f"::warning::guard: базовый коммит {base[:12]} отсутствует"
+            " (история переписана) — сравнение пропущено"
+        )
+        return 0
     base = _git("merge-base", base, head).strip() or base
     changed = _git("diff", "--name-only", base, head).split()
     before, after = count_tests(collect_test_sources(base)), count_tests(collect_test_sources(head))

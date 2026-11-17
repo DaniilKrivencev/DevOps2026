@@ -94,3 +94,8 @@ def test_main_ok_when_tests_added(repo, capsys):
 def test_main_without_base(base, capsys):
     assert ag.main(["guard", base]) == 0
     assert "пропущена" in capsys.readouterr().out
+
+
+def test_main_base_missing_after_history_rewrite(repo, capsys):
+    assert ag.main(["guard", "1" * 40]) == 0
+    assert "история переписана" in capsys.readouterr().out

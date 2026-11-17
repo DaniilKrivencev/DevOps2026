@@ -4,9 +4,9 @@
 
 # Пример curl с паролем-заглушкой «change_me» в документации API; пример
 # исправлен на переменную окружения $ADMIN_PASSWORD.
-5b3aba1a0b9350041abe456815c4e2de82653162:docs/API.md:curl-auth-user:36
+86c4e087849af29268153bbe4712d7b105cbbf4b:docs/API.md:curl-auth-user:36
 
 # Демонстрационный ненастоящий ключ из старой инструкции защиты ЛР5
 # (показ обнаружения секрета). Инструкция переписана: тестовый секрет
 # генерируется на защите и в репозиторий не попадает.
-2b0b7ba89d3a14bd56be3844ecbcdcfecef52fc8:docs/LAB5_CI.md:aws-access-token:107
+a8c403198d402fd562a6f342251ae0c663507ee9:docs/LAB5_CI.md:aws-access-token:107
