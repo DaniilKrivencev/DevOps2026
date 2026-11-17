@@ -10,15 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import User, current_user
 from app.database import get_db
+from app.logging_setup import install as install_logging
+from app.logging_setup import logger, setup_logging
 from app.routers import agenda, attendance, commissions, deputies, sessions
 
 APP_VERSION = "0.3.0"
+
+setup_logging()
 
 app = FastAPI(
     title="Городская Дума",
     description="Система учёта депутатов, комиссий, заседаний и посещаемости",
     version=APP_VERSION,
 )
+install_logging(app)
+logger.info("City Duma starting, version=%s", APP_VERSION)
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(deputies.router, prefix="/api/v1")
@@ -39,6 +45,7 @@ async def health(db: AsyncSession = Depends(get_db)):
     try:
         await db.execute(text("SELECT 1"))
     except Exception as exc:  # health должен отвечать даже при недоступной БД
+        logger.error("health: database unavailable: %s", exc)
         db_status = f"error: {exc}"
     return {"status": "ok", "database": db_status, "version": APP_VERSION}
 
